@@ -1,6 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import staticFiles from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { LoginLimiter } from '../auth/login-limiter.js';
@@ -124,5 +126,18 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     reply.header('Cache-Control', 'no-store');
     return { integrations: [], authentication: 'configured' as const, demoMode: config.demoMode, version: '0.1.0' };
   });
+  if (existsSync(config.webRoot)) {
+    await app.register(staticFiles, { root: config.webRoot, wildcard: false, index: false, immutable: true, maxAge: '1h' });
+    app.addHook('onSend', (_request, reply, payload, done) => {
+      if (String(reply.getHeader('content-type') ?? '').includes('text/html')) reply.header('Cache-Control', 'no-store');
+      done(null, payload);
+    });
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method === 'GET' && !request.url.startsWith('/api/') && !request.url.startsWith('/health/')) {
+        return reply.header('Cache-Control', 'no-store').sendFile('index.html', { maxAge: 0, immutable: false });
+      }
+      return reply.code(404).send({ error: 'not-found' });
+    });
+  }
   return app;
 }

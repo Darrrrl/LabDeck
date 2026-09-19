@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
 import { hashPassword } from '../auth/password.js';
 import { buildApp } from './app.js';
 
@@ -9,7 +10,7 @@ afterEach(async () => { await Promise.all(apps.splice(0).map(async (app) => app.
 
 function config(overrides: Record<string, unknown> = {}) {
   return {
-    host: '127.0.0.1', port: 7337, logLevel: 'silent' as const, databasePath: ':memory:',
+    host: '127.0.0.1', port: 7337, logLevel: 'silent' as const, databasePath: ':memory:', webRoot: '/definitely/not/present',
     canonicalOrigin: 'https://labdeck.test', allowedHosts: new Set(['labdeck.test']),
     passwordHash, demoMode: false, ...overrides
   };
@@ -94,5 +95,13 @@ describe('foundation HTTP API', () => {
     const preflight = await app.inject({ method: 'GET', url: '/api/v1/session', headers: { host: 'labdeck.test' } });
     const blocked = await app.inject({ method: 'POST', url: '/api/v1/session', headers: { host: 'labdeck.test', origin: 'https://labdeck.test', cookie: cookieValue(preflight.headers['set-cookie'], '__Host-labdeck_prelogin') }, payload: { password: 'wrong password', csrfToken: preflight.json<{ csrfToken: string }>().csrfToken } });
     expect(blocked.statusCode).toBe(429);
+  });
+
+  it('serves the SPA entry for browser routes without caching it', async () => {
+    const app = await buildApp(config({ webRoot: resolve('apps/web/dist') })); apps.push(app);
+    const response = await app.inject({ method: 'GET', url: '/settings', headers: { host: 'labdeck.test', accept: 'text/html' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.headers['cache-control']).toBe('no-store');
   });
 });

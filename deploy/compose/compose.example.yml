@@ -1,0 +1,44 @@
+services:
+  labdeck:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: labdeck:local
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+    ports:
+      - "127.0.0.1:${LABDECK_PORT:-7337}:7337"
+    environment:
+      LABDECK_HOST: 0.0.0.0
+      LABDECK_PORT: 7337
+      LABDECK_DATABASE_PATH: /var/lib/labdeck/labdeck.db
+      LABDECK_WEB_ROOT: /app/apps/web/dist
+      LABDECK_CANONICAL_ORIGIN: ${LABDECK_CANONICAL_ORIGIN:?set the HTTPS origin}
+      LABDECK_ALLOWED_HOSTS: ${LABDECK_ALLOWED_HOSTS:?set the public host and optional port}
+      LABDECK_OWNER_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
+    volumes:
+      - labdeck-data:/var/lib/labdeck
+      - type: bind
+        source: ${LABDECK_OWNER_PASSWORD_HASH_FILE:?set the host password hash file}
+        target: /run/secrets/owner_password_hash
+        read_only: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7337/health/ready',{headers:{host:process.env.LABDECK_ALLOWED_HOSTS.split(',')[0]}}).then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  labdeck-data:

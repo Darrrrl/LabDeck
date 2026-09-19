@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:unit
+      - run: npm run test:integration -- --project=foundation
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --project=chromium --grep shell
+      - run: npm run test:security
+      - run: docker compose -f deploy/compose/compose.example.yml config --quiet
+        env:
+          LABDECK_CANONICAL_ORIGIN: https://labdeck.test
+          LABDECK_ALLOWED_HOSTS: labdeck.test
+          LABDECK_OWNER_PASSWORD_HASH_FILE: /tmp/labdeck-owner-hash
+      - run: docker build -t labdeck:test .
