@@ -73,7 +73,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     reply.header('Cache-Control', 'no-store');
     const sessionToken = request.cookies[sessionCookie];
     const sessionCsrf = sessions.rotateCsrf(sessionToken);
-    if (sessionCsrf) return { authenticated: true, csrfToken: sessionCsrf };
+    if (sessionCsrf) return { authenticated: true, csrfToken: sessionCsrf, demoMode: config.demoMode };
     const csrf = prelogin.issue();
     reply.setCookie(preloginCookie, csrf.context, { httpOnly: true, secure: secureCookies, sameSite: 'strict', path: '/', maxAge: 600 });
     return { authenticated: false, csrfToken: csrf.token, demoMode: config.demoMode };
@@ -119,6 +119,10 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   app.get('/api/v1/overview', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return { overall: 'monitoring-incomplete' as const, title: 'No integrations configured' as const, message: 'Configure a supported integration to begin monitoring.' };
+  });
+  app.get('/api/v1/settings', (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { integrations: [], authentication: 'configured' as const, demoMode: config.demoMode, version: '0.1.0' };
   });
   return app;
 }

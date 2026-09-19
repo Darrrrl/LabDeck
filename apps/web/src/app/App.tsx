@@ -1,28 +1,29 @@
-import { useQuery } from '@tanstack/react-query';
-import { overviewResponseSchema } from '@labdeck/contracts';
-
-async function loadOverview() {
-  const response = await fetch('/api/v1/overview');
-  if (!response.ok) throw new Error('Unable to load LabDeck');
-  return overviewResponseSchema.parse(await response.json());
-}
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { OverviewPage } from '../features/overview/OverviewPage.js';
+import { SettingsPage } from '../features/settings/SettingsPage.js';
+import { deleteSession, getSession } from './api.js';
+import { Login } from './Login.js';
+import { Shell } from './Shell.js';
 
 export function App() {
-  const overview = useQuery({ queryKey: ['overview'], queryFn: loadOverview });
+  const queryClient = useQueryClient();
+  const session = useQuery({ queryKey: ['session'], queryFn: getSession, retry: false, staleTime: 0 });
+  if (session.isPending) return <main className="boot-state"><p>Opening LabDeck…</p></main>;
+  if (session.isError) return <main className="boot-state"><p role="alert">LabDeck is unavailable.</p></main>;
+  if (!session.data.authenticated) return <><DemoBanner active={session.data.demoMode} /><Login csrfToken={session.data.csrfToken} onSuccess={async () => { await queryClient.invalidateQueries({ queryKey: ['session'] }); }} /></>;
+  return <BrowserRouter>
+    <a className="skip-link" href="#main-content">Skip to content</a>
+    <Routes>
+      <Route element={<Shell demoMode={session.data.demoMode} onLogout={async () => { await deleteSession(session.data.csrfToken); queryClient.clear(); }} />}>
+        <Route index element={<OverviewPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="*" element={<OverviewPage />} />
+      </Route>
+    </Routes>
+  </BrowserRouter>;
+}
 
-  return (
-    <main>
-      <p className="eyebrow">LABDECK</p>
-      <h1>Homelab mission control</h1>
-      {overview.isPending ? <p>Loading…</p> : null}
-      {overview.isError ? <p role="alert">LabDeck is unavailable.</p> : null}
-      {overview.data ? (
-        <section aria-labelledby="empty-title">
-          <span className="status">Monitoring incomplete</span>
-          <h2 id="empty-title">{overview.data.title}</h2>
-          <p>{overview.data.message}</p>
-        </section>
-      ) : null}
-    </main>
-  );
+function DemoBanner({ active }: { active: boolean }) {
+  return active ? <div className="demo-banner" role="status">Fixture demo mode · loopback access only</div> : null;
 }

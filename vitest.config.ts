@@ -7,7 +7,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['apps/**/*.test.ts', 'packages/**/*.test.ts'],
+          include: ['apps/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}'],
           exclude: ['apps/**/*.integration.test.ts']
         }
       },
