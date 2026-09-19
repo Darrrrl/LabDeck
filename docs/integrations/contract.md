@@ -1,0 +1,95 @@
+# Integration contract
+
+This is the normative implementation contract. TypeScript below specifies shapes, not an implementation or a requirement to generate empty modules.
+
+## Identity and capability boundary
+
+An instance has an operator-chosen stable ID, display name, provider kind, enabled flag, required-for-overall flag, secret reference and configured base URL. IDs must not contain addresses, credentials, or display names that change over time. Entity IDs are namespaced by instance. Changing a provider/origin under an existing ID requires a new config revision and resets cursors/baselines; never silently combine unrelated histories.
+
+```ts
+type Connection = 'unknown' | 'reachable' | 'unreachable' | 'auth-error';
+type Health = 'unknown' | 'healthy' | 'warning' | 'critical';
+type Availability = 'supported' | 'unsupported' | 'permission-denied';
+type ErrorCode = 'timeout' | 'network' | 'auth' | 'rate-limited'
+  | 'invalid-response' | 'unsupported-version' | 'permission' | 'internal';
+
+interface IntegrationAdapter {
+  readonly kind: ProviderKind;
+  readonly groups: readonly PollGroup[];
+  poll(context: PollContext, group: string): Promise<PollBatch>;
+}
+interface PollGroup {
+  id: string;
+  capabilities: readonly CapabilityName[];
+  intervalMs: number;
+  deadlineMs: number;
+  establishesConnection: boolean;
+}
+interface PollContext {
+  instanceId: string;
+  signal: AbortSignal;
+  now: () => Date;
+  cursor: unknown; // validated by the adapter; no secrets
+  transport: ReadOnlyTransport; // bound origin, headers, paths, time/size limits
+}
+interface PollBatch {
+  results: CapabilityResult[]; // discriminated union keyed by capability name
+  metrics: MetricObservation[];
+  events: EventCandidate[];
+  nextCursor?: unknown;
+}
+```
+
+`CapabilityResult` is either a successful typed observation, explicit unsupported/permission state, or safe failure code. Each success includes capability, `observedAt`, completeness (`complete | partial`), Health, normalized warnings and a typed payload. Partial list data includes coverage/truncation and must not replace a known complete inventory or create disappearance events. Failure never supplies a fabricated empty payload.
+
+Define only capabilities a completed slice uses: `host.summary`, `host.filesystems`, `host.interfaces`, `host.disks`, `media.playback`, `media.library`, `downloads.queue`, `downloads.catalog`, `downloads.history`, `indexers.health`, `containers.inventory`, `containers.stats`, `network.peers`. Domain payloads are discriminated types, not arbitrary JSON bags. Common summaries derive from capability state in core selectors; avoid separate health/summary calls fetching the same data twice.
+
+Provider contexts receive narrow dependencies, not DB handles or an unrestricted HTTP client. Host adapter reads validated local snapshots instead of receiving a network transport. All instances use the same outcome envelope. An unexpected thrown adapter error is caught at the scheduler boundary and converted to a safe failure.
+
+## State and freshness
+
+Persist `lastAttemptAt`, `lastSuccessAt` and `lastErrorCode` per poll group, plus last good observation time per capability. Public fields include `observedAt`, `lastSuccessfulRefreshAt`, `nextExpectedAt`, and derived freshness (`fresh | stale | never`). A fresh file read does not refresh old collector data; use the collector's sample timestamp.
+
+- Stale after `max(3 × group interval, 30s)` without a successful fresh observation; SMART uses three SMART intervals.
+- A failed attempt updates the error and attempted time immediately, while the previous payload retains its timestamp. Show “Connection failed · showing data from 12 minutes ago.” A failure is not a zero count.
+- A timeout is “Unreachable,” not proof the upstream process is stopped. Unauthorized is “Credentials rejected.” A missing endpoint does not necessarily make the whole service unreachable.
+- Instance connection comes from the designated cheap connection group. Capability errors remain local; one slow library query cannot overwrite evidence of a successful session connection.
+- Scheduler restart loads old timestamps; it does not declare cached data fresh. Future timestamps >30s ahead are invalid and trigger a clock diagnostic.
+- Ingest each collector generation/sequence/capability observation only once. Re-reading an unchanged file may confirm transport availability, but must not add metric samples, advance threshold hysteresis, duplicate events, or refresh observation timestamps. Persist the ingestion watermark with the resulting writes.
+- Empty successful lists are distinct from failures. Unsupported never becomes zero or healthy. Disabled/not-configured instances are excluded from aggregate health.
+
+Overall precedence: current critical finding → “Critical”; current connection failure or warning → “Needs attention”; otherwise missing/stale required observation → “Monitoring incomplete”; otherwise → “All observed systems healthy.” Preserve secondary stale/coverage badges even when a higher-severity headline wins. Optional unsupported capabilities do not invalidate an otherwise observed service; requiredness is explicit per instance/capability. Persist outage transitions after two consecutive failed connection polls, recovery after one success; display failed attempts immediately. Unknown start-up state is not an outage event.
+
+## Polling and resilience
+
+| Group | Default cadence | Group deadline |
+| --- | --- | --- |
+| Host snapshot ingest | 5s (collector publishes every 5s) | 2s |
+| Jellyfin playback / service connection | 10s / 30s | 8s / 8s |
+| Arr queue / health | 15s / 60s | 10s / 10s |
+| Imports/history | 60s | 15s |
+| Catalog/counts/recent additions/calendar | 5m | 20s |
+| Docker inventory / stats in collector | 15s | 10s |
+| Tailscale status in collector | 30s | 5s |
+| Filesystems in collector | 30s | 5s |
+| SMART host timer | 10m | 20s per disk; 2m total |
+
+Use ±10% jitter. At most one active poll per instance/group, two requests per instance, eight external requests globally; one SMART process at a time. No overlapping interval jobs or unbounded pending queue. Schedule the next job after completion. Per-request 2s connection/5s total timeout, maximum 2MiB decoded body, 10 pages of 100 entries per group, maximum 10MiB total group data. Exceptions for an unpaginated catalog need a documented cap, not unlimited parsing. If capped, expose partial/unsupported detail and retain safe summary totals when authoritative.
+
+No immediate automatic retries within a poll. Consecutive group failures back off to 2×, 4×, up to 5m; honor Retry-After up to 15m. Auth failures retry slowly (5m). Success resets backoff. Cheap connection groups remain independently scheduled, but an instance-wide auth/rate-limit response gates all its groups. Catch every rejection. Cancel ongoing work on shutdown and drain bounded DB writes. Polling must not depend on browser presence.
+
+## Metrics and events
+
+Metrics use a registry: name, unit, scope, sampling class, valid range and aggregation meaning. Units: bytes, bytes/s, Celsius, seconds, count, ratio (0–1), CPU percent with its denominator explicitly documented. No arbitrary labels. An entity ID may identify a configured filesystem, physical disk, interface or selected container; names/titles/users are not metric labels.
+
+Counters are converted to rates using monotonic elapsed time in the collector. A first sample, reboot, negative delta, device replacement, reset or invalid elapsed interval produces null, never a spike. Library counts and filesystem capacity are gauges. Container CPU uses 100% per fully occupied logical CPU; host CPU is 0–100% across all CPUs. The UI must make these different denominators visible.
+
+Events contain `kind`, `severity`, `instanceId`, optional `entityId`, nullable upstream `occurredAt`, local `observedAt`, origin (`upstream | observed | threshold`), deterministic dedupe key and a small typed safe payload. Titles are generated from the typed payload, not raw HTML or log text.
+
+For upstream history use instance + event type + upstream ID, fetch an overlapping recent window, and persist cursor + events in one transaction. First connection baselines existing history without flooding the feed; optionally show the latest 20 clearly labeled historical entries. For snapshot transitions use persisted prior state and an episode/generation key. Baseline on first successful complete inventory; absence from partial/failed snapshots never means stop/deletion. Repeated thresholds produce one open episode and one recovery. If collection was absent, log an observation gap and bound the outage interval instead of inventing exact duration.
+
+Keep a separate dedupe/cursor baseline long enough that event retention cannot cause recurring old events to reappear. A config revision reset baselines again. If DB commit fails, do not advance the persisted cursor; uniqueness makes replay safe. Store neither full sessions nor raw commands in event payloads; watching history is sensitive local data.
+
+## Adding an integration
+
+Implement a typed payload, sanitized fixtures and adapter; register its groups and safe transport routes; add summary/detail selectors and UI; add failure/partial tests and compatibility evidence. Reuse core health/history/auth rather than adding integration-specific versions. Do not require every provider to supply every capability.
