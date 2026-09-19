@@ -2,6 +2,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { OverviewPage } from '../features/overview/OverviewPage.js';
 import { SettingsPage } from '../features/settings/SettingsPage.js';
+import { SystemPage } from '../features/system/SystemPage.js';
+import { StoragePage } from '../features/storage/StoragePage.js';
+import { EventsPage } from '../features/events/EventsPage.js';
 import { deleteSession, getSession } from './api.js';
 import { Login } from './Login.js';
 import { Shell } from './Shell.js';
@@ -17,6 +20,9 @@ export function App() {
     <Routes>
       <Route element={<Shell demoMode={session.data.demoMode} onLogout={async () => { await deleteSession(session.data.csrfToken); queryClient.clear(); }} />}>
         <Route index element={<OverviewPage />} />
+        <Route path="system" element={<SystemPage />} />
+        <Route path="storage" element={<StoragePage />} />
+        <Route path="events" element={<EventsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<OverviewPage />} />
       </Route>

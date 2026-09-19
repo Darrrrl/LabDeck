@@ -45,6 +45,20 @@ p { line-height: 1.55; }
 .section-heading p { margin: 7px 0 0; max-width: 620px; }
 .empty-row { margin-top: 26px; padding-top: 18px; display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
 .notice { padding: 24px; }.notice h2 { margin-top: 18px; }.notice p { color: var(--muted); }
+.health-strip { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 22px; }
+.health-strip p { margin: 9px 0 0; color: var(--muted); }.refresh-age, .detail-toolbar { color: var(--muted); font-size: 13px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.metric-card { min-width: 0; padding: 19px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.metric-card strong { display: block; margin: 16px 0 5px; font-size: 23px; letter-spacing: -.03em; }.metric-card > span { color: var(--muted); font-size: 12px; }
+.metric-label { display: flex; gap: 8px; align-items: center; color: #aeb5c3; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; }
+.storage-summary, .recent-events { margin-top: 14px; }.capacity-track { height: 8px; margin: 24px 0 10px; overflow: hidden; border-radius: 999px; background: #222630; }.capacity-track span { display: block; height: 100%; border-radius: inherit; background: #8299ee; }
+.capacity-labels { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: 12px; }
+.event-list { list-style: none; margin: 20px 0 0; padding: 0; }.event-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 42px; border-top: 1px solid var(--border); font-size: 13px; }.event-list time { color: var(--faint); }.event-list small { display: block; margin-top: 4px; color: var(--muted); }
+.event-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }.event-dot--warning { background: var(--amber); }.event-dot--critical { background: var(--red); }.event-dot--info { background: var(--accent); }
+.detail-toolbar { display: flex; align-items: center; gap: 14px; margin: -18px 0 22px; }.segmented { display: flex; margin-left: auto; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: #0d0f12; }.segmented button { min-width: 46px; padding: 5px 8px; color: var(--muted); border: 0; border-radius: 5px; background: transparent; cursor: pointer; }.segmented button.active { color: var(--text); background: var(--surface-raised); }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }.detail-card { min-height: 180px; }.detail-card > span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }.detail-card > strong { display: block; margin: 14px 0 7px; font-size: 26px; letter-spacing: -.03em; }.detail-card small { color: var(--muted); }
+.sparkline { width: 100%; height: 48px; margin-top: 24px; overflow: visible; }.sparkline polyline { fill: none; stroke: #8ea4f5; stroke-width: 1.7; vector-effect: non-scaling-stroke; }.sparkline-empty { min-height: 48px; display: flex; align-items: end; margin-top: 24px; color: var(--faint); font-size: 12px; }
+.volume-list { display: grid; gap: 14px; }.volume-card .sparkline { margin-top: 26px; }.fine-print { margin: 14px 0 0; color: var(--faint); font-size: 12px; }.integration-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--border); }.integration-row strong, .integration-row span { display: block; }.integration-row span { margin-top: 5px; color: var(--muted); font-size: 12px; }
 .loading-panel { height: 380px; padding: 28px; }.skeleton { display: block; width: 170px; height: 20px; border-radius: 5px; background: #1d2027; }
 .login-shell, .boot-state { min-height: 100vh; display: grid; place-items: center; padding: 32px; }
 .login-panel { width: min(400px, 100%); padding: 34px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 70px rgba(0,0,0,.32); }
@@ -58,8 +72,10 @@ form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; 
 .app-shell > .demo-banner { position: fixed; inset: 0 0 auto; z-index: 10; }.app-shell:has(> .demo-banner) .sidebar { padding-top: 56px; }.app-shell:has(> .demo-banner) main { padding-top: 86px; }
 @media (max-width: 760px) {
   .app-shell { display: block; padding-bottom: 70px; }.sidebar { position: fixed; z-index: 9; inset: auto 0 0; width: 100%; height: 64px; flex-direction: row; align-items: center; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); border: 1px solid var(--border); border-width: 1px 0 0; }
-  .brand { display: none; } nav { display: flex; flex: 1; } nav a { flex: 1; justify-content: center; } .quiet-button { margin: 0; width: 44px; font-size: 0; justify-content: center; }
+  .brand { display: none; } nav { display: flex; flex: 1; } nav a { flex: 1; justify-content: center; padding: 0; } nav a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .quiet-button { margin: 0; width: 44px; font-size: 0; justify-content: center; }
   main { width: min(100% - 32px, 640px); padding-top: 34px; }.page-header { min-height: 80px; margin-bottom: 20px; }.page-context { display: none; }.empty-state { min-height: 330px; }
   .section-heading, .empty-row { flex-direction: column; }.app-shell:has(> .demo-banner) .sidebar { padding-top: 8px; }.app-shell:has(> .demo-banner) main { padding-top: 66px; }
+  .metric-grid, .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.health-strip { align-items: flex-start; flex-direction: column; }.refresh-age { align-self: flex-start; }
 }
+@media (max-width: 430px) { .metric-grid, .detail-grid { grid-template-columns: 1fr; }.metric-card { padding: 16px; }.capacity-labels { display: grid; grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

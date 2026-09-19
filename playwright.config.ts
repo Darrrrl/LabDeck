@@ -11,7 +11,7 @@ export default defineConfig({
     env: {
       LABDECK_HOST: '127.0.0.1', LABDECK_PORT: '7338', LABDECK_LOG_LEVEL: 'silent', LABDECK_DATABASE_PATH: ':memory:',
       LABDECK_CANONICAL_ORIGIN: 'http://127.0.0.1:7338', LABDECK_ALLOWED_HOSTS: '127.0.0.1:7338', LABDECK_OWNER_PASSWORD_HASH: testHash,
-      LABDECK_DEMO_MODE: 'true', LABDECK_WEB_ROOT: './apps/web/dist'
+      LABDECK_DEMO_MODE: 'true', LABDECK_WEB_ROOT: './apps/web/dist', LABDECK_HOST_SNAPSHOT_PATH: './tests/fixtures/host/system-v1.json'
     }
   }
 });

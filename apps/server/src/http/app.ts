@@ -12,6 +12,7 @@ import { SessionStore } from '../auth/session-store.js';
 import { type AppConfig } from '../config/config.js';
 import { databaseIsReady, openDatabase } from '../db/database.js';
 import { HostStateService, HostStateStore } from '../core/state.js';
+import { HostQueries } from '../core/queries.js';
 import { HostMonitor } from '../integrations/host/monitor.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
@@ -28,6 +29,7 @@ function requestHost(request: FastifyRequest): string {
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const database = openDatabase(config.databasePath);
   const hostState = new HostStateService(new HostStateStore(database));
+  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable);
   const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
   const sessions = new SessionStore(database);
   if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
@@ -125,11 +127,29 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
 
   app.get('/api/v1/overview', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return { overall: 'monitoring-incomplete' as const, title: 'No integrations configured' as const, message: 'Configure a supported integration to begin monitoring.' };
+    return hostQueries.overview();
+  });
+  app.get('/api/v1/system', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const range = (request.query as { range?: string }).range === '24h' ? '24h' : '1h';
+    return hostQueries.system(range);
+  });
+  app.get('/api/v1/storage', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const range = (request.query as { range?: string }).range === '24h' ? '24h' : '1h';
+    return hostQueries.storage(range);
+  });
+  app.get('/api/v1/events', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const query = request.query as { limit?: string; before?: string };
+    const limit = query.limit === undefined ? 50 : Number.parseInt(query.limit, 10);
+    const before = query.before === undefined ? undefined : Number.parseInt(query.before, 10);
+    if (!Number.isSafeInteger(limit) || (before !== undefined && !Number.isSafeInteger(before))) return reply.code(400).send({ error: 'invalid-request' });
+    return hostQueries.events(limit, before);
   });
   app.get('/api/v1/settings', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return { integrations: [], authentication: 'configured' as const, demoMode: config.demoMode, version: '0.1.0' };
+    return hostQueries.settings(config.demoMode);
   });
   if (existsSync(config.webRoot)) {
     await app.register(staticFiles, { root: config.webRoot, wildcard: false, index: false, immutable: true, maxAge: '1h' });
