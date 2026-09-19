@@ -19,4 +19,8 @@ describe('loadConfig', () => {
   it('requires demo mode to remain on loopback', () => {
     expect(() => loadConfig({ LABDECK_DEMO_MODE: 'true', LABDECK_HOST: '0.0.0.0' })).toThrow(/loopback/);
   });
+
+  it('resolves an optional host snapshot path', () => {
+    expect(loadConfig({ LABDECK_HOST_SNAPSHOT_PATH: './snapshot.json' }).hostSnapshotPath).toMatch(/snapshot\.json$/);
+  });
 });

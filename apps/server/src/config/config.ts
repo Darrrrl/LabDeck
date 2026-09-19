@@ -10,6 +10,7 @@ const environmentSchema = z.object({
   LABDECK_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   LABDECK_DATABASE_PATH: z.string().min(1).default('./data/labdeck.db'),
   LABDECK_WEB_ROOT: z.string().min(1).default('./apps/web/dist'),
+  LABDECK_HOST_SNAPSHOT_PATH: z.string().min(1).optional(),
   LABDECK_CANONICAL_ORIGIN: z.url().default('https://labdeck.localhost'),
   LABDECK_ALLOWED_HOSTS: z.string().optional(),
   LABDECK_OWNER_PASSWORD_HASH_FILE: z.string().min(1).optional(),
@@ -27,6 +28,7 @@ export interface AppConfig {
   logLevel: z.infer<typeof environmentSchema>['LABDECK_LOG_LEVEL'];
   databasePath: string;
   webRoot: string;
+  hostSnapshotPath?: string;
   canonicalOrigin: string;
   allowedHosts: ReadonlySet<string>;
   passwordHash?: string;
@@ -61,6 +63,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     logLevel: parsed.LABDECK_LOG_LEVEL,
     databasePath: parsed.LABDECK_DATABASE_PATH,
     webRoot: resolve(parsed.LABDECK_WEB_ROOT),
+    ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
     canonicalOrigin: origin.origin,
     allowedHosts,
     ...(passwordHash ? { passwordHash } : {}),

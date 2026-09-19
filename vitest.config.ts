@@ -15,7 +15,15 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'foundation',
-          include: ['apps/**/*.integration.test.ts']
+          include: ['apps/**/*.integration.test.ts'],
+          exclude: ['apps/**/*.host.integration.test.ts']
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: 'host',
+          include: ['apps/**/*.host.integration.test.ts']
         }
       }
     ]

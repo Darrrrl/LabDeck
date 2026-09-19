@@ -11,6 +11,8 @@ import { PreloginCsrfStore } from '../auth/prelogin-csrf.js';
 import { SessionStore } from '../auth/session-store.js';
 import { type AppConfig } from '../config/config.js';
 import { databaseIsReady, openDatabase } from '../db/database.js';
+import { HostStateService, HostStateStore } from '../core/state.js';
+import { HostMonitor } from '../integrations/host/monitor.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
 function exactEqual(left: string, right: string): boolean {
@@ -25,6 +27,8 @@ function requestHost(request: FastifyRequest): string {
 
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const database = openDatabase(config.databasePath);
+  const hostState = new HostStateService(new HostStateStore(database));
+  const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
   const sessions = new SessionStore(database);
   if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
   const prelogin = new PreloginCsrfStore();
@@ -58,7 +62,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     }
     done();
   });
-  app.addHook('onClose', (_instance, done) => { database.close(); done(); });
+  app.addHook('onReady', (done) => { hostMonitor?.start(); done(); });
+  app.addHook('onClose', async () => { await hostMonitor?.stop(); database.close(); });
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
     app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');
