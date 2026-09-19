@@ -1,0 +1,21 @@
+{
+  "name": "@labdeck/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --platform node --target node24 --clean --sourcemap",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@labdeck/contracts": "0.1.0",
+    "fastify": "5.12.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.13",
+    "tsup": "8.5.1"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "labdeck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first homelab mission control",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <27",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @labdeck/contracts && npm run build -w @labdeck/web && npm run build -w @labdeck/server",
+    "check": "npm run typecheck && npm run lint && npm run build",
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @labdeck/server\" \"npm run dev -w @labdeck/web\"",
+    "lint": "eslint .",
+    "start": "npm run start -w @labdeck/server",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.6",
+    "concurrently": "10.0.5",
+    "eslint": "10.0.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "5.0.1"
+  }
+}

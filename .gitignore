@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+build/
+.cache/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+data/
+secrets/
