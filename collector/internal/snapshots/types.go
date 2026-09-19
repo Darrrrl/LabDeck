@@ -1,0 +1,96 @@
+package snapshots
+
+import "time"
+
+const SchemaVersion = "1"
+
+type Snapshot struct {
+	SchemaVersion    string       `json:"schemaVersion"`
+	CollectorVersion string       `json:"collectorVersion"`
+	HostID           string       `json:"hostId"`
+	BootID           string       `json:"bootId"`
+	Generation       string       `json:"generation"`
+	Sequence         uint64       `json:"sequence"`
+	GeneratedAt      time.Time    `json:"generatedAt"`
+	Capabilities     Capabilities `json:"capabilities"`
+}
+
+type Capabilities struct {
+	Summary     Capability[HostSummary]        `json:"summary"`
+	Filesystems Capability[[]Filesystem]       `json:"filesystems"`
+	Interfaces  Capability[[]NetworkInterface] `json:"interfaces"`
+	BlockIO     Capability[[]BlockDeviceIO]    `json:"blockIo"`
+}
+
+type Capability[T any] struct {
+	Status       string    `json:"status"`
+	ObservedAt   time.Time `json:"observedAt"`
+	Completeness string    `json:"completeness"`
+	Data         *T        `json:"data,omitempty"`
+	ErrorCode    string    `json:"errorCode,omitempty"`
+}
+
+func Success[T any](at time.Time, data T) Capability[T] {
+	return Capability[T]{Status: "ok", ObservedAt: at, Completeness: "complete", Data: &data}
+}
+
+func Failure[T any](at time.Time, code string) Capability[T] {
+	return Capability[T]{Status: "error", ObservedAt: at, Completeness: "complete", ErrorCode: code}
+}
+
+type HostSummary struct {
+	Hostname      string  `json:"hostname"`
+	UptimeSeconds float64 `json:"uptimeSeconds"`
+	CPU           CPU     `json:"cpu"`
+	Load          Load    `json:"load"`
+	Memory        Memory  `json:"memory"`
+	Swap          Swap    `json:"swap"`
+}
+
+type CPU struct {
+	Model              string   `json:"model"`
+	LogicalProcessors  int      `json:"logicalProcessors"`
+	UtilizationPercent *float64 `json:"utilizationPercent"`
+}
+
+type Load struct {
+	One     float64 `json:"one"`
+	Five    float64 `json:"five"`
+	Fifteen float64 `json:"fifteen"`
+}
+
+type Memory struct {
+	TotalBytes     uint64 `json:"totalBytes"`
+	UsedBytes      uint64 `json:"usedBytes"`
+	AvailableBytes uint64 `json:"availableBytes"`
+}
+type Swap struct {
+	TotalBytes uint64 `json:"totalBytes"`
+	UsedBytes  uint64 `json:"usedBytes"`
+	FreeBytes  uint64 `json:"freeBytes"`
+}
+type Filesystem struct {
+	ID             string  `json:"id"`
+	Path           string  `json:"path"`
+	Source         string  `json:"source"`
+	FSType         string  `json:"fsType"`
+	MountIdentity  string  `json:"mountIdentity"`
+	TotalBytes     uint64  `json:"totalBytes"`
+	FreeBytes      uint64  `json:"freeBytes"`
+	AvailableBytes uint64  `json:"availableBytes"`
+	UsedBytes      uint64  `json:"usedBytes"`
+	ReservedBytes  uint64  `json:"reservedBytes"`
+	UsedRatio      float64 `json:"usedRatio"`
+}
+type NetworkInterface struct {
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	ReceiveBytesPerSecond  *float64 `json:"receiveBytesPerSecond"`
+	TransmitBytesPerSecond *float64 `json:"transmitBytesPerSecond"`
+}
+type BlockDeviceIO struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	ReadBytesPerSecond  *float64 `json:"readBytesPerSecond"`
+	WriteBytesPerSecond *float64 `json:"writeBytesPerSecond"`
+}

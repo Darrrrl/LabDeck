@@ -1,0 +1,34 @@
+[Unit]
+Description=LabDeck host metrics collector
+After=local-fs.target
+
+[Service]
+Type=simple
+User=labdeck-collector
+Group=labdeck-collector
+SupplementaryGroups=labdeck-readers
+ExecStart=/usr/local/bin/labdeck-collector -config /etc/labdeck/collector.json
+Restart=on-failure
+RestartSec=5s
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/labdeck-collector/public/system
+MemoryMax=64M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

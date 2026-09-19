@@ -1,0 +1,15 @@
+{
+  "hostId": "primary-server",
+  "outputDirectory": "/var/lib/labdeck-collector/public/system",
+  "intervalSeconds": 5,
+  "filesystems": [
+    { "id": "root", "path": "/" },
+    { "id": "media", "path": "/srv/media" }
+  ],
+  "interfaces": [
+    { "id": "lan", "name": "enp3s0" }
+  ],
+  "blockDevices": [
+    { "id": "system-disk", "name": "sda" }
+  ]
+}

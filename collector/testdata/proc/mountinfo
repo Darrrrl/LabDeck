@@ -1,0 +1,2 @@
+25 20 8:1 / / rw,relatime - ext4 /dev/sda1 rw
+26 25 8:1 /media /srv/media rw,relatime - ext4 /dev/sda1 rw

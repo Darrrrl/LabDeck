@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1",
+  "collectorVersion": "0.1.0",
+  "hostId": "synthetic-server",
+  "bootId": "00000000-0000-4000-8000-000000000001",
+  "generation": "0123456789abcdef0123456789abcdef",
+  "sequence": 2,
+  "generatedAt": "2026-09-19T20:00:05Z",
+  "capabilities": {
+    "summary": {
+      "status": "ok",
+      "observedAt": "2026-09-19T20:00:05Z",
+      "completeness": "complete",
+      "data": {
+        "hostname": "synthetic-server",
+        "uptimeSeconds": 86405,
+        "cpu": { "model": "Synthetic 4-Core CPU", "logicalProcessors": 4, "utilizationPercent": 18.5 },
+        "load": { "one": 0.42, "five": 0.31, "fifteen": 0.25 },
+        "memory": { "totalBytes": 17179869184, "usedBytes": 7516192768, "availableBytes": 9663676416 },
+        "swap": { "totalBytes": 4294967296, "usedBytes": 1073741824, "freeBytes": 3221225472 }
+      }
+    },
+    "filesystems": {
+      "status": "ok",
+      "observedAt": "2026-09-19T20:00:05Z",
+      "completeness": "complete",
+      "data": [
+        { "id": "media", "path": "/srv/media", "source": "/dev/sda1", "fsType": "ext4", "mountIdentity": "8:1|/media", "totalBytes": 1000000000000, "freeBytes": 400000000000, "availableBytes": 390000000000, "usedBytes": 600000000000, "reservedBytes": 10000000000, "usedRatio": 0.6 }
+      ]
+    },
+    "interfaces": {
+      "status": "ok",
+      "observedAt": "2026-09-19T20:00:05Z",
+      "completeness": "complete",
+      "data": [
+        { "id": "lan", "name": "enp3s0", "receiveBytesPerSecond": 125000, "transmitBytesPerSecond": 64000 }
+      ]
+    },
+    "blockIo": {
+      "status": "ok",
+      "observedAt": "2026-09-19T20:00:05Z",
+      "completeness": "complete",
+      "data": [
+        { "id": "system-disk", "name": "sda", "readBytesPerSecond": 4096, "writeBytesPerSecond": 8192 }
+      ]
+    }
+  }
+}
