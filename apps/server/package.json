@@ -4,18 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --platform node --target node24 --clean --sourcemap",
+    "build": "tsup src/index.ts src/auth/hash-password-cli.ts --format esm --platform node --target node24 --clean --sourcemap",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "password:hash": "tsx src/auth/hash-password-cli.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.4",
     "@labdeck/contracts": "0.1.0",
+    "argon2": "^0.45.1",
+    "better-sqlite3": "^13.0.3",
     "fastify": "5.12.5",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "tsx": "4.23.13",
-    "tsup": "8.5.1"
+    "@types/better-sqlite3": "^7.6.13",
+    "tsup": "8.5.1",
+    "tsx": "4.23.13"
   }
 }

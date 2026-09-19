@@ -19,6 +19,7 @@
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @labdeck/server\" \"npm run dev -w @labdeck/web\"",
     "lint": "eslint .",
     "start": "npm run start -w @labdeck/server",
+    "password:hash": "npm run password:hash -w @labdeck/server",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run",
     "typecheck": "npm run typecheck --workspaces --if-present"
@@ -33,5 +34,11 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.70.0",
     "vitest": "5.0.1"
+  },
+  "allowScripts": {
+    "argon2@0.45.1": true,
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true
   }
 }

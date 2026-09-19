@@ -1,22 +1,124 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
+import cookie from '@fastify/cookie';
+import helmet from '@fastify/helmet';
+import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { LoginLimiter } from '../auth/login-limiter.js';
+import { verifyPassword } from '../auth/password.js';
+import { PreloginCsrfStore } from '../auth/prelogin-csrf.js';
+import { SessionStore } from '../auth/session-store.js';
 import { type AppConfig } from '../config/config.js';
+import { databaseIsReady, openDatabase } from '../db/database.js';
 
-export function buildApp(config: AppConfig): FastifyInstance {
+const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
+function exactEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function requestHost(request: FastifyRequest): string {
+  return (request.headers.host ?? '').trim().toLowerCase();
+}
+
+export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
+  const database = openDatabase(config.databasePath);
+  const sessions = new SessionStore(database);
+  if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
+  const prelogin = new PreloginCsrfStore();
+  const limiter = new LoginLimiter();
+  const secureCookies = !config.demoMode;
+  const sessionCookie = secureCookies ? '__Host-labdeck_session' : 'labdeck_dev_session';
+  const preloginCookie = secureCookies ? '__Host-labdeck_prelogin' : 'labdeck_dev_prelogin';
   const app = Fastify({
-    logger: config.logLevel === 'silent' ? false : { level: config.logLevel },
+    trustProxy: false,
+    logger: config.logLevel === 'silent' ? false : {
+      level: config.logLevel,
+      redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie']
+    },
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 64 * 1024
   });
 
-  app.get('/health/live', () => ({ ok: true }));
-  app.get('/health/ready', () => ({ ok: true }));
-  app.get('/api/v1/overview', (_request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return {
-      overall: 'monitoring-incomplete' as const,
-      title: 'No integrations configured' as const,
-      message: 'Configure a supported integration to begin monitoring.'
-    };
+  await app.register(cookie);
+  await app.register(helmet, {
+    contentSecurityPolicy: { directives: {
+      defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'none'"], frameAncestors: ["'none'"]
+    } },
+    crossOriginEmbedderPolicy: false
   });
 
+  app.addHook('onRequest', (request, reply, done) => {
+    if (!config.allowedHosts.has(requestHost(request))) {
+      void reply.code(400).send({ error: 'invalid-request' });
+      return;
+    }
+    done();
+  });
+  app.addHook('onClose', (_instance, done) => { database.close(); done(); });
+  app.setErrorHandler((error, _request, reply) => {
+    if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
+    app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');
+    void reply.code(500).send({ error: 'internal' });
+  });
+
+  app.get('/health/live', () => ({ ok: true }));
+  app.get('/health/ready', (_request, reply) => {
+    const ok = databaseIsReady(database) && config.passwordHash !== undefined;
+    return reply.code(ok ? 200 : 503).send({ ok });
+  });
+
+  app.get('/api/v1/session', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const sessionToken = request.cookies[sessionCookie];
+    const sessionCsrf = sessions.rotateCsrf(sessionToken);
+    if (sessionCsrf) return { authenticated: true, csrfToken: sessionCsrf };
+    const csrf = prelogin.issue();
+    reply.setCookie(preloginCookie, csrf.context, { httpOnly: true, secure: secureCookies, sameSite: 'strict', path: '/', maxAge: 600 });
+    return { authenticated: false, csrfToken: csrf.token, demoMode: config.demoMode };
+  });
+
+  app.post('/api/v1/session', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const origin = request.headers.origin;
+    if (!origin || !exactEqual(origin, config.canonicalOrigin)) return reply.code(403).send({ error: 'forbidden' });
+    if (!limiter.allow(request.ip)) return reply.code(429).send({ error: 'rate-limited' });
+    const parsed = loginSchema.safeParse(request.body);
+    if (!parsed.success || !prelogin.consume(request.cookies[preloginCookie], parsed.data.csrfToken)) {
+      return reply.code(403).send({ error: 'invalid-credentials' });
+    }
+    if (!config.passwordHash || !(await verifyPassword(config.passwordHash, parsed.data.password))) {
+      return reply.code(config.passwordHash ? 401 : 503).send({ error: config.passwordHash ? 'invalid-credentials' : 'not-configured' });
+    }
+    const session = sessions.create();
+    reply.clearCookie(preloginCookie, { path: '/' });
+    reply.setCookie(sessionCookie, session.token, { httpOnly: true, secure: secureCookies, sameSite: 'strict', path: '/', maxAge: 8 * 60 * 60 });
+    return { authenticated: true, csrfToken: session.csrfToken, expiresAt: new Date(session.expiresAt).toISOString() };
+  });
+
+  app.delete('/api/v1/session', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const origin = request.headers.origin;
+    const token = request.cookies[sessionCookie];
+    const csrfToken = typeof request.headers['x-csrf-token'] === 'string' ? request.headers['x-csrf-token'] : undefined;
+    if (!origin || !exactEqual(origin, config.canonicalOrigin) || !sessions.verifyCsrf(token, csrfToken)) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+    sessions.delete(token);
+    reply.clearCookie(sessionCookie, { path: '/' });
+    return reply.code(204).send();
+  });
+
+  app.addHook('preHandler', (request, reply, done) => {
+    if (!request.url.startsWith('/api/v1/') || request.url === '/api/v1/session') return done();
+    if (!sessions.verify(request.cookies[sessionCookie])) { void reply.code(401).send({ error: 'unauthorized' }); return; }
+    done();
+  });
+
+  app.get('/api/v1/overview', (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { overall: 'monitoring-incomplete' as const, title: 'No integrations configured' as const, message: 'Configure a supported integration to begin monitoring.' };
+  });
   return app;
 }
