@@ -2,7 +2,7 @@
 
 ## Current state
 
-This repository contains planning documents only. No package scripts, collector, Docker image, or tests exist yet. M0 validation checks document structure and links. All commands in PLAN.md describe the interface future milestones must provide.
+M1 provides the application toolchain, unit/integration/browser/security checks, Compose configuration, and image definition. Commands for later milestones remain planned contracts until those slices implement them. See `m1-validation-report.md` for measured results and the Docker-daemon limitation.
 
 ## Planned command contract
 

@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0 complete (documentation only); M1–M9 not started. Do not begin implementation unless requested. Commands below are **planned tooling contracts**, not commands that currently exist or have passed. Each milestone introduces its named checks and any commands it uses for the first time. See [validation protocol](docs/plans/validation.md).
+Status: M0 and M1 complete; M2 in progress; M3–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
