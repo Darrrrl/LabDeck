@@ -4,6 +4,8 @@ import type { EventsResponse, HostCollectorSnapshot, OverviewResponse, StorageRe
 type Capability = HostCollectorSnapshot['capabilities'][keyof HostCollectorSnapshot['capabilities']];
 type SummaryCapability = HostCollectorSnapshot['capabilities']['summary'];
 type FilesystemsCapability = HostCollectorSnapshot['capabilities']['filesystems'];
+type InterfacesCapability = HostCollectorSnapshot['capabilities']['interfaces'];
+type BlockIoCapability = HostCollectorSnapshot['capabilities']['blockIo'];
 type IntegrationRow = { connection: 'unknown' | 'reachable' | 'unreachable'; attempted_at: number | null; succeeded_at: number | null; safe_error_code: string | null };
 type CapabilityRow = { observed_at: number; normalized_json: string };
 type MetricRow = { bucket_start: number; count: number; expected_count: number; sum: number; last: number };
@@ -31,6 +33,8 @@ export class HostQueries {
     const filesystemRow = this.capability('host.filesystems');
     const summary = parseCapability<SummaryCapability>(summaryRow);
     const filesystems = parseCapability<FilesystemsCapability>(filesystemRow);
+    const interfaces = parseCapability<InterfacesCapability>(this.capability('host.interfaces'));
+    const blockIo = parseCapability<BlockIoCapability>(this.capability('host.block-io'));
     const observedAt = summaryRow?.observed_at ?? null;
     const currentFreshness = freshness(observedAt, this.now());
     const storage = filesystems?.status === 'ok' ? filesystems.data[0] : undefined;
@@ -47,6 +51,8 @@ export class HostQueries {
       lastAttemptAt: iso(integration?.attempted_at ?? null), errorCode: integration?.safe_error_code ?? null,
       host: summary?.status === 'ok' ? summary.data : null,
       storage: storage ? { id: storage.id, path: storage.path, source: storage.source, fsType: storage.fsType, totalBytes: storage.totalBytes, usedBytes: storage.usedBytes, availableBytes: storage.availableBytes, reservedBytes: storage.reservedBytes, usedRatio: storage.usedRatio } : null,
+      network: interfaces?.status === 'ok' ? interfaces.data[0] ?? null : null,
+      diskIo: blockIo?.status === 'ok' ? blockIo.data[0] ?? null : null,
       events: this.events(5).events
     };
   }
@@ -54,9 +60,12 @@ export class HostQueries {
   system(range: '1h' | '24h'): SystemResponse {
     const row = this.capability('host.summary');
     const summary = parseCapability<SummaryCapability>(row);
+    const interfaces = parseCapability<InterfacesCapability>(this.capability('host.interfaces'));
+    const blockIo = parseCapability<BlockIoCapability>(this.capability('host.block-io'));
     return {
       configured: this.configured, freshness: freshness(row?.observed_at ?? null, this.now()), observedAt: iso(row?.observed_at ?? null),
       data: summary?.status === 'ok' ? summary.data : null,
+      interfaces: interfaces?.status === 'ok' ? interfaces.data : [], blockIo: blockIo?.status === 'ok' ? blockIo.data : [],
       trends: { range, cpu: this.metric('cpu.utilization', range), memory: this.metric('memory.used', range) }
     };
   }

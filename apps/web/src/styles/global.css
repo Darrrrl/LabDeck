@@ -47,7 +47,7 @@ p { line-height: 1.55; }
 .notice { padding: 24px; }.notice h2 { margin-top: 18px; }.notice p { color: var(--muted); }
 .health-strip { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 22px; }
 .health-strip p { margin: 9px 0 0; color: var(--muted); }.refresh-age, .detail-toolbar { color: var(--muted); font-size: 13px; }
-.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0; }
 .metric-card { min-width: 0; padding: 19px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .metric-card strong { display: block; margin: 16px 0 5px; font-size: 23px; letter-spacing: -.03em; }.metric-card > span { color: var(--muted); font-size: 12px; }
 .metric-label { display: flex; gap: 8px; align-items: center; color: #aeb5c3; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; }

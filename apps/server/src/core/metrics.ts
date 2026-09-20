@@ -45,6 +45,8 @@ export function persistMetrics(database: Database.Database, observations: readon
     }
   }
   for (const resolution of resolutions) {
-    database.prepare('DELETE FROM metric_buckets WHERE resolution = ? AND bucket_start < ?').run(resolution.id, now - resolution.retention);
+    database.prepare(`DELETE FROM metric_buckets WHERE rowid IN (
+      SELECT rowid FROM metric_buckets WHERE resolution = ? AND bucket_start < ? LIMIT 1000
+    )`).run(resolution.id, now - resolution.retention);
   }
 }

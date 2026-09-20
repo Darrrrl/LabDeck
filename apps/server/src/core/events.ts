@@ -21,8 +21,10 @@ export function persistEvent(database: Database.Database, event: EventCandidate)
 }
 
 export function retainEvents(database: Database.Database, now: number): void {
-  database.prepare('DELETE FROM events WHERE observed_at < ?').run(now - 90 * 24 * 60 * 60 * 1_000);
   database.prepare(`DELETE FROM events WHERE id IN (
-    SELECT id FROM events ORDER BY observed_at DESC, id DESC LIMIT -1 OFFSET 50000
+    SELECT id FROM events WHERE observed_at < ? ORDER BY observed_at LIMIT 1000
+  )`).run(now - 90 * 24 * 60 * 60 * 1_000);
+  database.prepare(`DELETE FROM events WHERE id IN (
+    SELECT id FROM events ORDER BY observed_at DESC, id DESC LIMIT 1000 OFFSET 50000
   )`).run();
 }

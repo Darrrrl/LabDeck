@@ -21,13 +21,15 @@ const filesystemDataSchema = z.object({
   id: z.string(), path: z.string(), source: z.string(), fsType: z.string(), totalBytes: z.number(), usedBytes: z.number(),
   availableBytes: z.number(), reservedBytes: z.number(), usedRatio: z.number()
 });
+const networkDataSchema = z.object({ id: z.string(), name: z.string(), receiveBytesPerSecond: z.number().nullable(), transmitBytesPerSecond: z.number().nullable() });
+const blockIoDataSchema = z.object({ id: z.string(), name: z.string(), readBytesPerSecond: z.number().nullable(), writeBytesPerSecond: z.number().nullable() });
 export const eventSchema = z.object({ id: z.number().int(), kind: z.string(), severity: z.enum(['info', 'warning', 'critical']), observedAt: timestampSchema, entityId: z.string().nullable(), payload: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])) });
 
 export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(false), overall: z.literal('monitoring-incomplete'), title: z.literal('No integrations configured'), message: z.string() }),
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
-    host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), events: z.array(eventSchema).max(10) })
+    host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -47,6 +49,7 @@ export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 
 export const systemResponseSchema = z.object({
   configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), data: hostSummaryDataSchema.nullable(),
+  interfaces: z.array(networkDataSchema), blockIo: z.array(blockIoDataSchema),
   trends: z.object({ range: z.enum(['1h', '24h']), cpu: z.array(metricPointSchema), memory: z.array(metricPointSchema) })
 });
 export type SystemResponse = z.infer<typeof systemResponseSchema>;

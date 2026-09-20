@@ -18,6 +18,8 @@ describe('cached host queries', () => {
     expect(overview.configured && overview.host?.hostname).toBe('synthetic-server');
     expect(overview.configured && overview.freshness).toBe('fresh');
     expect(queries.system('1h').data?.cpu.utilizationPercent).toBe(18.5);
+    expect(queries.system('1h').interfaces[0]?.receiveBytesPerSecond).toBe(125_000);
+    expect(queries.system('1h').blockIo[0]?.writeBytesPerSecond).toBe(8_192);
     expect(queries.storage('1h').filesystems[0]?.availableBytes).toBe(390_000_000_000);
     expect(queries.events().events).toHaveLength(0);
     expect(database.prepare('SELECT generation, sequence FROM poll_state').get()).toEqual(watermarkBefore);
