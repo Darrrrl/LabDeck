@@ -34,3 +34,16 @@ docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.h
 ```
 
 Review the rendered configuration before starting it. The override adds a supplemental read-only group and mounts only the collector's sanitized public directory at `/run/labdeck-host:ro`; it does not expose host `/proc`, `/sys`, raw devices, or a daemon socket.
+
+## Jellyfin monitoring
+
+Create a dedicated Jellyfin API key and store only its value in a host file readable by container UID/GID `10001:10001`, mode `0440`. Configure the internal API base URL separately from the browser URL; both may include a reverse-proxy path prefix. The browser URL is only used for the “Open Jellyfin” link.
+
+```sh
+LABDECK_JELLYFIN_BASE_URL=http://jellyfin:8096/jellyfin \
+LABDECK_JELLYFIN_BROWSER_URL=https://media.example-tailnet.ts.net/jellyfin \
+LABDECK_JELLYFIN_API_KEY_FILE=/secure/path/jellyfin-api-key \
+docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.jellyfin.yml config --quiet
+```
+
+The application performs only bounded `GET` requests to system info, sessions, item counts, and a twelve-item recent-additions query. It does not follow redirects or expose the API key to the browser, database, logs, or URL query strings. Add explicit network membership if the service name is on another Compose network; do not publish Jellyfin merely for LabDeck.

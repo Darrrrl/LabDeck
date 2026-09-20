@@ -5,6 +5,7 @@ import { SettingsPage } from '../features/settings/SettingsPage.js';
 import { SystemPage } from '../features/system/SystemPage.js';
 import { StoragePage } from '../features/storage/StoragePage.js';
 import { EventsPage } from '../features/events/EventsPage.js';
+import { MediaPage } from '../features/media/MediaPage.js';
 import { deleteSession, getSession } from './api.js';
 import { Login } from './Login.js';
 import { Shell } from './Shell.js';
@@ -22,6 +23,7 @@ export function App() {
         <Route index element={<OverviewPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="storage" element={<StoragePage />} />
+        <Route path="media" element={<MediaPage />} />
         <Route path="events" element={<EventsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<OverviewPage />} />

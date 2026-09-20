@@ -1,0 +1,11 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_JELLYFIN_BASE_URL: ${LABDECK_JELLYFIN_BASE_URL:?set the internal Jellyfin API base URL}
+      LABDECK_JELLYFIN_BROWSER_URL: ${LABDECK_JELLYFIN_BROWSER_URL:?set the browser-reachable Jellyfin URL}
+      LABDECK_JELLYFIN_API_KEY_FILE: /run/secrets/jellyfin_api_key
+    volumes:
+      - type: bind
+        source: ${LABDECK_JELLYFIN_API_KEY_FILE:?set the host Jellyfin API key file}
+        target: /run/secrets/jellyfin_api_key
+        read_only: true

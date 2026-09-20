@@ -23,13 +23,27 @@ const filesystemDataSchema = z.object({
 });
 const networkDataSchema = z.object({ id: z.string(), name: z.string(), receiveBytesPerSecond: z.number().nullable(), transmitBytesPerSecond: z.number().nullable() });
 const blockIoDataSchema = z.object({ id: z.string(), name: z.string(), readBytesPerSecond: z.number().nullable(), writeBytesPerSecond: z.number().nullable() });
+export const mediaSessionSchema = z.object({
+  id: z.string(), userName: z.string(), title: z.string(), subtitle: z.string().nullable(), mediaId: z.string(),
+  paused: z.boolean(), positionSeconds: z.number().nonnegative().nullable(), durationSeconds: z.number().nonnegative().nullable(),
+  progressRatio: z.number().min(0).max(1).nullable(), playbackMode: z.enum(['direct-play', 'direct-stream', 'transcode', 'unknown']),
+  bitrateBitsPerSecond: z.number().int().nonnegative().nullable(), bitrateSource: z.enum(['transcode-estimate', 'media-source']).nullable()
+});
+export type MediaSession = z.infer<typeof mediaSessionSchema>;
+const mediaRecentItemSchema = z.object({ id: z.string(), name: z.string(), type: z.enum(['movie', 'series', 'episode', 'other']), seriesName: z.string().nullable(), addedAt: timestampSchema.nullable() });
+const mediaSummarySchema = z.object({
+  id: z.string(), name: z.string(), browserUrl: z.url(), connection: z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']),
+  freshness: freshnessSchema, observedAt: timestampSchema.nullable(), lastSuccessfulRefreshAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
+  sessions: z.array(mediaSessionSchema).max(100)
+});
 export const eventSchema = z.object({ id: z.number().int(), kind: z.string(), severity: z.enum(['info', 'warning', 'critical']), observedAt: timestampSchema, entityId: z.string().nullable(), payload: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])) });
 
 export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(false), overall: z.literal('monitoring-incomplete'), title: z.literal('No integrations configured'), message: z.string() }),
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
-    host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(), events: z.array(eventSchema).max(10) })
+    host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(),
+    media: mediaSummarySchema.nullable(), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -41,7 +55,7 @@ export const sessionResponseSchema = z.discriminatedUnion('authenticated', [
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 
 export const settingsResponseSchema = z.object({
-  integrations: z.array(z.object({ id: z.string(), name: z.string(), connection: z.enum(['unknown', 'reachable', 'unreachable']), freshness: freshnessSchema, lastSuccessfulRefreshAt: timestampSchema.nullable(), safeErrorCode: z.string().nullable() })),
+  integrations: z.array(z.object({ id: z.string(), name: z.string(), connection: z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']), freshness: freshnessSchema, lastSuccessfulRefreshAt: timestampSchema.nullable(), safeErrorCode: z.string().nullable() })),
   authentication: z.literal('configured'), demoMode: z.boolean(), version: z.string(),
   hostCollector: z.object({ configured: z.boolean(), historyAvailable: z.boolean(), message: z.string() })
 });
@@ -59,6 +73,13 @@ export type StorageResponse = z.infer<typeof storageResponseSchema>;
 
 export const eventsResponseSchema = z.object({ events: z.array(eventSchema).max(100), nextCursor: z.number().int().nullable() });
 export type EventsResponse = z.infer<typeof eventsResponseSchema>;
+
+export const mediaResponseSchema = z.object({
+  configured: z.boolean(), name: z.string().nullable(), browserUrl: z.url().nullable(), connection: z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']),
+  playback: z.object({ freshness: freshnessSchema, observedAt: timestampSchema.nullable(), lastSuccessfulRefreshAt: timestampSchema.nullable(), errorCode: z.string().nullable(), sessions: z.array(mediaSessionSchema).max(100) }),
+  library: z.object({ freshness: freshnessSchema, observedAt: timestampSchema.nullable(), lastSuccessfulRefreshAt: timestampSchema.nullable(), errorCode: z.string().nullable(), counts: z.object({ movies: z.number().int().nonnegative(), series: z.number().int().nonnegative(), episodes: z.number().int().nonnegative() }).nullable(), recent: z.array(mediaRecentItemSchema).max(20) })
+});
+export type MediaResponse = z.infer<typeof mediaResponseSchema>;
 
 const bytesSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const rateSchema = z.number().nonnegative().finite().nullable();

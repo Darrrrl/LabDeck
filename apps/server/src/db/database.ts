@@ -77,6 +77,10 @@ CREATE TABLE events (
   payload_json TEXT NOT NULL
 );
 CREATE INDEX events_observed_at ON events(observed_at DESC, id DESC);
+`,
+`
+ALTER TABLE poll_state ADD COLUMN attempted_at INTEGER;
+ALTER TABLE poll_state ADD COLUMN safe_error_code TEXT;
 `
 ];
 

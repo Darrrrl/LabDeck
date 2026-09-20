@@ -35,3 +35,25 @@ test('host storage and stale state remain legible', async ({ page }) => {
   await expect(page.getByText('390 GB available')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+test('media shows mixed playback and library state without page overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/v1/media', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    configured: true, name: 'Jellyfin', browserUrl: 'https://media.example.test/jellyfin', connection: 'reachable',
+    playback: { freshness: 'fresh', observedAt: new Date().toISOString(), lastSuccessfulRefreshAt: new Date().toISOString(), errorCode: null, sessions: [
+      { id: 's1', userName: 'Mira', title: 'Example Station', subtitle: 'Fresh Signals', mediaId: 'm1', paused: false, positionSeconds: 900, durationSeconds: 3600, progressRatio: .25, playbackMode: 'direct-play', bitrateBitsPerSecond: 8000000, bitrateSource: 'media-source' },
+      { id: 's2', userName: 'Noah', title: 'Local Orbit', subtitle: null, mediaId: 'm2', paused: true, positionSeconds: null, durationSeconds: null, progressRatio: null, playbackMode: 'transcode', bitrateBitsPerSecond: null, bitrateSource: null }
+    ] },
+    library: { freshness: 'stale', observedAt: '2026-09-19T10:00:00.000Z', lastSuccessfulRefreshAt: '2026-09-19T10:00:00.000Z', errorCode: 'timeout', counts: { movies: 42, series: 7, episodes: 128 }, recent: [{ id: 'new', name: 'A Quiet Packet', type: 'episode', seriesName: 'Example Station', addedAt: '2026-09-19T18:30:00.000Z' }] }
+  }) }));
+  await page.goto('/'); await page.getByLabel('Owner password').fill('labdeck-test-password'); await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('link', { name: 'Media' }).click();
+  await expect(page.getByRole('heading', { name: 'Jellyfin' })).toBeVisible();
+  await expect(page.getByText('Mira · Playing · Direct play')).toBeVisible();
+  await expect(page.getByText('Noah · Paused · Transcoding')).toBeVisible();
+  await expect(page.getByText(/Refresh failed \(timeout\)/)).toBeVisible();
+  for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
+});

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: accepted baseline, updated through the M2 implementation on 2026-09-20. Later-milestone code/module names remain proposed until their slice begins.
+Status: accepted baseline, updated through the M3 implementation on 2026-09-20. Later-milestone code/module names remain proposed until their slice begins.
 
 ## System shape
 

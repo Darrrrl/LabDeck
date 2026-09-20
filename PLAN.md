@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M2 implementation complete; M2 Ubuntu live evidence pending; M3–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M3 implementation complete; M2 Ubuntu and M3 Jellyfin live evidence pending; M4–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -69,6 +69,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M1. Protocol and permission rules in `docs/integrations/host-collector.md` are required inputs.
 
 ## M3 — Jellyfin and first usable release
+
+**Status:** M3.1–M3.3 fixture implementation complete 2026-09-20. Live installed-version, credential, and path-prefix compatibility remains explicitly pending; see [M3 validation report](docs/plans/m3-validation-report.md).
 
 **Goal:** Real Jellyfin activity and library counts appear alongside host health without weakening failure isolation.
 

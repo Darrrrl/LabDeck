@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 
@@ -11,6 +11,9 @@ const environmentSchema = z.object({
   LABDECK_DATABASE_PATH: z.string().min(1).default('./data/labdeck.db'),
   LABDECK_WEB_ROOT: z.string().min(1).default('./apps/web/dist'),
   LABDECK_HOST_SNAPSHOT_PATH: z.string().min(1).optional(),
+  LABDECK_JELLYFIN_BASE_URL: z.url().optional(),
+  LABDECK_JELLYFIN_BROWSER_URL: z.url().optional(),
+  LABDECK_JELLYFIN_API_KEY_FILE: z.string().min(1).optional(),
   LABDECK_CANONICAL_ORIGIN: z.url().default('https://labdeck.localhost'),
   LABDECK_ALLOWED_HOSTS: z.string().optional(),
   LABDECK_OWNER_PASSWORD_HASH_FILE: z.string().min(1).optional(),
@@ -20,7 +23,11 @@ const environmentSchema = z.object({
   if (value.LABDECK_OWNER_PASSWORD_HASH_FILE && value.LABDECK_OWNER_PASSWORD_HASH) {
     context.addIssue({ code: 'custom', message: 'Configure one owner password hash source, not both' });
   }
+  const jellyfin = [value.LABDECK_JELLYFIN_BASE_URL, value.LABDECK_JELLYFIN_BROWSER_URL, value.LABDECK_JELLYFIN_API_KEY_FILE];
+  if (jellyfin.some(Boolean) && !jellyfin.every(Boolean)) context.addIssue({ code: 'custom', message: 'Jellyfin base URL, browser URL, and API key file must be configured together' });
 });
+
+export interface JellyfinConfig { id: 'jellyfin'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
 
 export interface AppConfig {
   host: string;
@@ -29,6 +36,7 @@ export interface AppConfig {
   databasePath: string;
   webRoot: string;
   hostSnapshotPath?: string;
+  jellyfin?: JellyfinConfig;
   canonicalOrigin: string;
   allowedHosts: ReadonlySet<string>;
   passwordHash?: string;
@@ -55,6 +63,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
   }
   if (passwordHash && !passwordHash.startsWith('$argon2id$')) throw new Error('Owner password hash must use Argon2id');
 
+  let jellyfin: JellyfinConfig | undefined;
+  if (parsed.LABDECK_JELLYFIN_BASE_URL && parsed.LABDECK_JELLYFIN_BROWSER_URL && parsed.LABDECK_JELLYFIN_API_KEY_FILE) {
+    const baseUrl = serviceUrl(parsed.LABDECK_JELLYFIN_BASE_URL, 'Jellyfin base URL', true);
+    const browserUrl = serviceUrl(parsed.LABDECK_JELLYFIN_BROWSER_URL, 'Jellyfin browser URL', true);
+    const keyPath = resolve(parsed.LABDECK_JELLYFIN_API_KEY_FILE);
+    const keyStat = lstatSync(keyPath);
+    if (!keyStat.isFile() || keyStat.isSymbolicLink()) throw new Error('Jellyfin API key must be a regular non-symlink file');
+    const mode = keyStat.mode & 0o777;
+    if ((mode & 0o007) !== 0) throw new Error('Jellyfin API key file must not be accessible to other users');
+    const apiKey = readFileSync(keyPath, 'utf8').trim();
+    if (!apiKey || apiKey.length > 512 || /[\r\n]/.test(apiKey)) throw new Error('Jellyfin API key file is invalid');
+    jellyfin = { id: 'jellyfin', name: 'Jellyfin', baseUrl, browserUrl, apiKey };
+  }
+
   const configuredHosts = parsed.LABDECK_ALLOWED_HOSTS?.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
   const allowedHosts = new Set(configuredHosts?.length ? configuredHosts : [origin.host.toLowerCase()]);
   return {
@@ -64,9 +86,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     databasePath: parsed.LABDECK_DATABASE_PATH,
     webRoot: resolve(parsed.LABDECK_WEB_ROOT),
     ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
+    ...(jellyfin ? { jellyfin } : {}),
     canonicalOrigin: origin.origin,
     allowedHosts,
     ...(passwordHash ? { passwordHash } : {}),
     demoMode
   };
+}
+
+function serviceUrl(value: string, label: string, allowPath: boolean): string {
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || (!allowPath && url.pathname !== '/')) {
+    throw new Error(`${label} must be an HTTP(S) URL without credentials, query, or fragment`);
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (hostname.startsWith('169.254.') || /^(?:fe8|fe9|fea|feb)[0-9a-f]:/.test(hostname) || hostname === 'metadata.google.internal') throw new Error(`${label} must not target link-local metadata`);
+  return url.toString().replace(/\/$/, '');
 }

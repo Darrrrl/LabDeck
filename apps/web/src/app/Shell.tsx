@@ -1,4 +1,4 @@
-import { Activity, Database, LayoutDashboard, ListTree, LogOut, MonitorCog, Settings } from 'lucide-react';
+import { Activity, Clapperboard, Database, LayoutDashboard, ListTree, LogOut, MonitorCog, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () => Promise<void> }) {
@@ -11,6 +11,7 @@ export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () 
           <NavLink to="/" end><LayoutDashboard aria-hidden="true" size={17} /><span>Overview</span></NavLink>
           <NavLink to="/system"><MonitorCog aria-hidden="true" size={17} /><span>System</span></NavLink>
           <NavLink to="/storage"><Database aria-hidden="true" size={17} /><span>Storage</span></NavLink>
+          <NavLink to="/media"><Clapperboard aria-hidden="true" size={17} /><span>Media</span></NavLink>
           <NavLink to="/events"><ListTree aria-hidden="true" size={17} /><span>Events</span></NavLink>
           <NavLink to="/settings"><Settings aria-hidden="true" size={17} /><span>Settings</span></NavLink>
         </nav>

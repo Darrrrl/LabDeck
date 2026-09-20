@@ -16,7 +16,7 @@ export default defineConfig({
         test: {
           name: 'foundation',
           include: ['apps/**/*.integration.test.ts'],
-          exclude: ['apps/**/*.host.integration.test.ts']
+          exclude: ['apps/**/*.host.integration.test.ts', 'apps/**/*.jellyfin.integration.test.ts']
         }
       },
       {
@@ -24,6 +24,13 @@ export default defineConfig({
         test: {
           name: 'host',
           include: ['apps/**/*.host.integration.test.ts']
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: 'jellyfin',
+          include: ['apps/**/*.jellyfin.integration.test.ts']
         }
       }
     ]
