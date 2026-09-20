@@ -1,6 +1,6 @@
 # Architecture
 
-Status: accepted planning baseline, 2026-09-19. All code/module names below are proposed. No application has been implemented.
+Status: accepted baseline, updated through the M2 implementation on 2026-09-20. Later-milestone code/module names remain proposed until their slice begins.
 
 ## System shape
 
@@ -47,6 +47,8 @@ See [provider contract](docs/integrations/contract.md) for the precise boundary,
 Version routes under `/api/v1`. Planned authenticated GET endpoints:
 
 - `/overview`: compact aggregate, warnings, summary cards and recent activity; maximum 256KiB.
+- `/system`: cached host summary plus bounded 1h/24h metric projections; introduced in M2 as a page-shaped read model.
+- `/storage`: cached selected-filesystem state plus bounded 1h/24h used-capacity projections; introduced in M2 as a page-shaped read model.
 - `/integrations`: configured integration state and capability/freshness metadata, no credentials or secret references.
 - `/integrations/:id/:capability`: normalized cached detail; identifiers must resolve in the static configuration, never become URLs.
 - `/metrics`: registered series ID(s), UTC time range, resolution; maximum 20 series, 1,000 points each, 400 days, and bounded response bytes.
@@ -86,7 +88,7 @@ Backups use SQLite's online backup API into a separate target, followed by integ
 
 ## Planned repository structure
 
-Only documentation exists now. Introduce these paths when their milestone needs them:
+Introduce these paths only when their milestone needs them. M1 and M2 paths now exist; later integration paths remain illustrative:
 
 ```text
 apps/
