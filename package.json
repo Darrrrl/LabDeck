@@ -23,6 +23,7 @@
     "password:hash": "npm run password:hash -w @labdeck/server",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run",
+    "test:live": "node scripts/live-check.mjs",
     "test:e2e": "npm run build && playwright test",
     "test:security": "npm run build && node scripts/security-check.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"

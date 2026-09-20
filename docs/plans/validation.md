@@ -2,7 +2,7 @@
 
 ## Current state
 
-M1 provides the application toolchain, unit/integration/browser/security checks, Compose configuration, and image definition. Commands for later milestones remain planned contracts until those slices implement them. See `m1-validation-report.md` for measured results and the Docker-daemon limitation.
+M1 provides the application toolchain and secure shell. M2 adds host fixture/cross-build checks plus an explicitly opted-in Ubuntu live command. See `m1-validation-report.md` and `m2-validation-report.md` for measured results and environment limitations.
 
 ## Planned command contract
 

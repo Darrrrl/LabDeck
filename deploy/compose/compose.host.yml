@@ -1,0 +1,11 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_HOST_SNAPSHOT_PATH: /run/labdeck-host/system/snapshot.json
+    group_add:
+      - ${LABDECK_READERS_GID:?set the numeric labdeck-readers GID}
+    volumes:
+      - type: bind
+        source: ${LABDECK_HOST_PUBLIC_DIRECTORY:?set the collector public directory}
+        target: /run/labdeck-host
+        read_only: true

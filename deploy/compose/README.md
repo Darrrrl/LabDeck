@@ -23,4 +23,14 @@ sudo tailscale serve --bg http://127.0.0.1:7337
 
 Review `tailscale serve status` and use the resulting HTTPS URL as the canonical origin. LabDeck still requires its owner password. A LAN deployment needs an authenticated TLS reverse proxy to the same loopback address. Do not expose port 7337 publicly.
 
-The container runs as non-root with no Linux capabilities, a read-only root filesystem, a small temporary `/tmp`, and one writable SQLite volume. It has no Docker socket, devices, host namespaces, or host filesystem mounts. M1 does not install the host collector.
+The base container runs as non-root with no Linux capabilities, a read-only root filesystem, a small temporary `/tmp`, and one writable SQLite volume. It has no Docker socket, devices, host namespaces, or host filesystem mounts.
+
+After separately installing and reviewing the [unprivileged host collector](../systemd/README.md), enable host monitoring with the second Compose file:
+
+```sh
+LABDECK_READERS_GID="$(getent group labdeck-readers | cut -d: -f3)" \
+LABDECK_HOST_PUBLIC_DIRECTORY=/var/lib/labdeck-collector/public \
+docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.host.yml config --quiet
+```
+
+Review the rendered configuration before starting it. The override adds a supplemental read-only group and mounts only the collector's sanitized public directory at `/run/labdeck-host:ro`; it does not expose host `/proc`, `/sys`, raw devices, or a daemon socket.

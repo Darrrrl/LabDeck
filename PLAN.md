@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0 and M1 complete; M2 in progress; M3–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M2 implementation complete; M2 Ubuntu live evidence pending; M3–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
