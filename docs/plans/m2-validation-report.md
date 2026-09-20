@@ -16,15 +16,20 @@ Validated 2026-09-20 on macOS arm64 with Node 26.7.0, npm 11.19.0, an official G
 
 | Command | Result |
 | --- | --- |
+| `npm ci` | Passed: 377 packages installed from the lockfile |
 | `npm run check` | Passed: typecheck, lint, docs links, frontend/backend build |
-| `npm run test:unit` | Passed: 7 files, 14 tests before final M2 validation rerun |
+| `npm run test:unit` | Passed: 7 files, 14 tests |
 | `npm run test:integration -- --project=foundation` | Passed: 1 file, 8 tests |
-| `npm run test:integration -- --project=host` | Passed: 4 files, 15 tests before final M2 validation rerun |
-| `npm run test:e2e -- --project=chromium --grep 'host|storage|stale'` | Passed: fixture-backed Chromium flow, including authenticated 390px overflow check |
+| `npm run test:integration -- --project=host` | Passed: 4 files, 15 tests |
+| `npm run test:e2e -- --project=chromium` | Passed: 5 Chromium tests; shell/keyboard, three viewport sizes, and fixture-backed host/storage/stale flow |
+| `npm run test:security` | Passed: client bundle and both Compose files respect the secret/privilege boundary |
+| `npm audit --omit=dev` | Passed with registry access: zero production vulnerabilities reported |
 | `go -C collector test ./...` | Passed with the downloaded official Go toolchain |
 | `go -C collector vet ./...` | Passed with the downloaded official Go toolchain |
 | Linux `amd64` and `arm64` collector cross-builds | Passed |
-| `npm run test:live -- --provider=host` | Correctly reports skipped without explicit opt-in; Ubuntu measurement pending |
+| Base and host-override `docker compose ... config --quiet` | Passed with documented required variables |
+| `docker compose -f deploy/compose/compose.example.yml build` | Could not run: the local Docker daemon socket does not exist; CI remains the image-build gate |
+| `npm run test:live -- --provider=host` | Correctly skips without explicit opt-in; with opt-in it correctly reports that Linux is required; Ubuntu measurement pending |
 
 ## Remaining live gate
 
