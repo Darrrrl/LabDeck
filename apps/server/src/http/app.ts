@@ -18,6 +18,10 @@ import { ReadOnlyTransport } from '../core/read-only-transport.js';
 import { JellyfinAdapter } from '../integrations/jellyfin/adapter.js';
 import { JellyfinMonitor } from '../integrations/jellyfin/monitor.js';
 import { JellyfinStateStore } from '../integrations/jellyfin/state.js';
+import { ArrTransport } from '../integrations/arr/common/transport.js';
+import { ArrAdapter } from '../integrations/arr/adapter.js';
+import { ArrMonitor } from '../integrations/arr/monitor.js';
+import { ArrStateStore } from '../integrations/arr/state.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
 function exactEqual(left: string, right: string): boolean {
@@ -34,10 +38,13 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const database = openDatabase(config.databasePath);
   const hostState = new HostStateService(new HostStateStore(database));
   const jellyfinState = new JellyfinStateStore(database);
-  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && jellyfinState.historyAvailable, Date.now,
-    config.jellyfin ? { id: config.jellyfin.id, name: config.jellyfin.name, browserUrl: config.jellyfin.browserUrl } : undefined);
+  const arrStates = (config.arr ?? []).map((item) => ({ config: item, state: new ArrStateStore(database, item.kind) }));
+  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && jellyfinState.historyAvailable && arrStates.every(({ state }) => state.historyAvailable), Date.now,
+    config.jellyfin ? { id: config.jellyfin.id, name: config.jellyfin.name, browserUrl: config.jellyfin.browserUrl } : undefined,
+    (config.arr ?? []).map(({ id, name, browserUrl }) => ({ id, name, browserUrl })));
   const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
   const jellyfinMonitor = config.jellyfin ? new JellyfinMonitor(new JellyfinAdapter(new ReadOnlyTransport(config.jellyfin.baseUrl, config.jellyfin.apiKey)), jellyfinState) : undefined;
+  const arrMonitors = arrStates.map(({ config: item, state }) => new ArrMonitor(new ArrAdapter(item.kind, new ArrTransport(item.baseUrl, item.apiKey)), state));
   const sessions = new SessionStore(database);
   if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
   const prelogin = new PreloginCsrfStore();
@@ -71,8 +78,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     }
     done();
   });
-  app.addHook('onReady', (done) => { hostMonitor?.start(); jellyfinMonitor?.start(); done(); });
-  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), jellyfinMonitor?.stop()]); database.close(); });
+  app.addHook('onReady', (done) => { hostMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); done(); });
+  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop())]); database.close(); });
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
     app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');
@@ -158,6 +165,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     reply.header('Cache-Control', 'no-store');
     return hostQueries.media();
   });
+  app.get('/api/v1/downloads', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.downloads(); });
   app.get('/api/v1/settings', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return hostQueries.settings(config.demoMode);

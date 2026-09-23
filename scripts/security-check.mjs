@@ -8,7 +8,7 @@ async function files(path) {
 }
 
 const forbidden = ['LABDECK_SECRET_CANARY_7dcf3d', 'X-Api-Key', '/var/run/docker.sock'];
-const targets = [...await files(resolve('apps/web/dist')), resolve('deploy/compose/compose.example.yml'), resolve('deploy/compose/compose.host.yml'), resolve('deploy/compose/compose.jellyfin.yml')];
+const targets = [...await files(resolve('apps/web/dist')), resolve('deploy/compose/compose.example.yml'), resolve('deploy/compose/compose.host.yml'), resolve('deploy/compose/compose.jellyfin.yml'), resolve('deploy/compose/compose.sonarr.yml'), resolve('deploy/compose/compose.radarr.yml')];
 const violations = [];
 for (const target of targets) {
   const content = await readFile(target, 'utf8');
@@ -30,5 +30,10 @@ for (const required of ['LABDECK_JELLYFIN_API_KEY_FILE: /run/secrets/jellyfin_ap
   if (!jellyfinCompose.includes(required)) violations.push(`jellyfin compose: missing ${required}`);
 }
 if (jellyfinCompose.includes('LABDECK_JELLYFIN_API_KEY:')) violations.push('jellyfin compose: raw API key environment variable is forbidden');
+for (const provider of ['sonarr', 'radarr']) {
+  const content = await readFile(resolve(`deploy/compose/compose.${provider}.yml`), 'utf8');
+  for (const required of [`LABDECK_${provider.toUpperCase()}_API_KEY_FILE: /run/secrets/${provider}_api_key`, `target: /run/secrets/${provider}_api_key`, 'read_only: true']) if (!content.includes(required)) violations.push(`${provider} compose: missing ${required}`);
+  if (content.includes(`LABDECK_${provider.toUpperCase()}_API_KEY:`)) violations.push(`${provider} compose: raw API key environment variable is forbidden`);
+}
 if (violations.length) { console.error(violations.join('\n')); process.exitCode = 1; }
 else console.log('Security boundary checks passed.');

@@ -14,6 +14,8 @@ const environmentSchema = z.object({
   LABDECK_JELLYFIN_BASE_URL: z.url().optional(),
   LABDECK_JELLYFIN_BROWSER_URL: z.url().optional(),
   LABDECK_JELLYFIN_API_KEY_FILE: z.string().min(1).optional(),
+  LABDECK_SONARR_BASE_URL: z.url().optional(), LABDECK_SONARR_BROWSER_URL: z.url().optional(), LABDECK_SONARR_API_KEY_FILE: z.string().min(1).optional(),
+  LABDECK_RADARR_BASE_URL: z.url().optional(), LABDECK_RADARR_BROWSER_URL: z.url().optional(), LABDECK_RADARR_API_KEY_FILE: z.string().min(1).optional(),
   LABDECK_CANONICAL_ORIGIN: z.url().default('https://labdeck.localhost'),
   LABDECK_ALLOWED_HOSTS: z.string().optional(),
   LABDECK_OWNER_PASSWORD_HASH_FILE: z.string().min(1).optional(),
@@ -25,9 +27,13 @@ const environmentSchema = z.object({
   }
   const jellyfin = [value.LABDECK_JELLYFIN_BASE_URL, value.LABDECK_JELLYFIN_BROWSER_URL, value.LABDECK_JELLYFIN_API_KEY_FILE];
   if (jellyfin.some(Boolean) && !jellyfin.every(Boolean)) context.addIssue({ code: 'custom', message: 'Jellyfin base URL, browser URL, and API key file must be configured together' });
+  for (const [name, fields] of [['Sonarr', [value.LABDECK_SONARR_BASE_URL, value.LABDECK_SONARR_BROWSER_URL, value.LABDECK_SONARR_API_KEY_FILE]], ['Radarr', [value.LABDECK_RADARR_BASE_URL, value.LABDECK_RADARR_BROWSER_URL, value.LABDECK_RADARR_API_KEY_FILE]]] as const) {
+    if (fields.some(Boolean) && !fields.every(Boolean)) context.addIssue({ code: 'custom', message: `${name} base URL, browser URL, and API key file must be configured together` });
+  }
 });
 
 export interface JellyfinConfig { id: 'jellyfin'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
+export interface ArrConfig { id: 'sonarr' | 'radarr'; kind: 'sonarr' | 'radarr'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
 
 export interface AppConfig {
   host: string;
@@ -37,6 +43,7 @@ export interface AppConfig {
   webRoot: string;
   hostSnapshotPath?: string;
   jellyfin?: JellyfinConfig;
+  arr?: ArrConfig[];
   canonicalOrigin: string;
   allowedHosts: ReadonlySet<string>;
   passwordHash?: string;
@@ -76,6 +83,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     if (!apiKey || apiKey.length > 512 || /[\r\n]/.test(apiKey)) throw new Error('Jellyfin API key file is invalid');
     jellyfin = { id: 'jellyfin', name: 'Jellyfin', baseUrl, browserUrl, apiKey };
   }
+  const arr: ArrConfig[] = [];
+  const arrInputs = [
+    { id: 'sonarr' as const, name: 'Sonarr', base: parsed.LABDECK_SONARR_BASE_URL, browser: parsed.LABDECK_SONARR_BROWSER_URL, key: parsed.LABDECK_SONARR_API_KEY_FILE },
+    { id: 'radarr' as const, name: 'Radarr', base: parsed.LABDECK_RADARR_BASE_URL, browser: parsed.LABDECK_RADARR_BROWSER_URL, key: parsed.LABDECK_RADARR_API_KEY_FILE }
+  ];
+  for (const input of arrInputs) if (input.base && input.browser && input.key) arr.push({ id: input.id, kind: input.id, name: input.name, baseUrl: serviceUrl(input.base, `${input.name} base URL`, true), browserUrl: serviceUrl(input.browser, `${input.name} browser URL`, true), apiKey: secretFile(input.key, `${input.name} API key`) });
 
   const configuredHosts = parsed.LABDECK_ALLOWED_HOSTS?.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
   const allowedHosts = new Set(configuredHosts?.length ? configuredHosts : [origin.host.toLowerCase()]);
@@ -87,11 +100,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     webRoot: resolve(parsed.LABDECK_WEB_ROOT),
     ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
     ...(jellyfin ? { jellyfin } : {}),
+    arr,
     canonicalOrigin: origin.origin,
     allowedHosts,
     ...(passwordHash ? { passwordHash } : {}),
     demoMode
   };
+}
+
+function secretFile(path: string, label: string): string {
+  const keyPath = resolve(path); const keyStat = lstatSync(keyPath);
+  if (!keyStat.isFile() || keyStat.isSymbolicLink()) throw new Error(`${label} must be a regular non-symlink file`);
+  if ((keyStat.mode & 0o007) !== 0) throw new Error(`${label} file must not be accessible to other users`);
+  const value = readFileSync(keyPath, 'utf8').trim(); if (!value || value.length > 512 || /[\r\n]/.test(value)) throw new Error(`${label} file is invalid`);
+  return value;
 }
 
 function serviceUrl(value: string, label: string, allowPath: boolean): string {

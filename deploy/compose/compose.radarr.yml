@@ -1,0 +1,11 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_RADARR_BASE_URL: ${LABDECK_RADARR_BASE_URL:?set the internal Radarr API base URL}
+      LABDECK_RADARR_BROWSER_URL: ${LABDECK_RADARR_BROWSER_URL:?set the browser-reachable Radarr URL}
+      LABDECK_RADARR_API_KEY_FILE: /run/secrets/radarr_api_key
+    volumes:
+      - type: bind
+        source: ${LABDECK_RADARR_API_KEY_FILE:?set the host Radarr API key file}
+        target: /run/secrets/radarr_api_key
+        read_only: true

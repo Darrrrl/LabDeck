@@ -1,6 +1,6 @@
 # M3 validation report
 
-Date: 2026-09-20
+Date: 2026-09-20; acceptance coverage updated 2026-09-23
 
 ## Milestone/task
 
@@ -14,6 +14,7 @@ M3.1–M3.3 — Jellyfin and first usable release.
 - Added baseline-safe playback observations. Initial sessions do not create start events; newly observed session/media pairs create one minimal typed event and replay does not duplicate it.
 - Added cached `/api/v1/media`, overview summary/Currently Watching, Media page, counts, recent additions, explicit stale/auth/unreachable states and a separately configured browser launch URL.
 - Added deployment override and read-only live runner. The key is read only from a restricted server-side file and is absent from public contracts, browser bundles, URLs, normalized persistence and event payloads.
+- Added explicit successful-empty playback/library, unknown playback mode, library-only failure and secret-bearing error persistence coverage. The first-release browser journey now proves host health, available storage and current playback together on Overview, then verifies retained sessions under a credential-rejected Jellyfin state.
 
 ## Files/contracts changed
 
@@ -26,11 +27,11 @@ M3.1–M3.3 — Jellyfin and first usable release.
 ## Commands actually run and results
 
 - `npm run test:unit` — passed, 7 files / 16 tests.
-- `npm run test:integration -- --project=jellyfin` — passed, 1 file / 10 tests.
+- `npm run test:integration -- --project=jellyfin` — passed, 1 file / 13 tests.
 - `npm run check` — passed typecheck, lint, documentation links and production builds.
-- `npm run test:integration` — passed, 13 files / 49 tests.
+- `npm run test:integration` — passed, 13 files / 52 tests.
 - `npm run test:security` — passed build and secret/deployment boundary scan.
-- `PLAYWRIGHT_BROWSERS_PATH=/tmp/labdeck-playwright npm run test:e2e -- --grep 'media|overview'` — passed, 1 Chromium journey; checks mixed playback/library failure and no page overflow at 390×844, 768×1024 and 1440×900.
+- `PLAYWRIGHT_BROWSERS_PATH=/tmp/labdeck-playwright npm run test:e2e -- --grep 'media|overview|first-release'` — passed, 1 Chromium journey; checks the complete Overview question set, mixed playback/library failure, credential rejection with last-good sessions, and no page overflow at 390×844, 768×1024 and 1440×900.
 - `PLAYWRIGHT_BROWSERS_PATH=/tmp/labdeck-playwright npm run test:e2e` — passed, all 6 Chromium journeys.
 - Combined base + Jellyfin `docker compose ... config --quiet` with non-secret placeholder paths — passed.
 - `npm run test:live -- --provider=jellyfin` — correctly skipped because `LABDECK_LIVE_TEST=true` and operator configuration were not supplied.

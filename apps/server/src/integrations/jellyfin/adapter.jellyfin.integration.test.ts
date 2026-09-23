@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../../db/database.js';
 import { ReadOnlyTransport, SafeTransportError } from '../../core/read-only-transport.js';
-import { JellyfinAdapter, type PlaybackObservation } from './adapter.js';
+import { JellyfinAdapter, type LibraryObservation, type PlaybackObservation } from './adapter.js';
 import { JellyfinStateStore } from './state.js';
 
 const fixture = (name: string) => JSON.parse(readFileSync(resolve(`tests/fixtures/jellyfin/10.10.7/${name}.json`), 'utf8')) as unknown;
@@ -13,8 +13,8 @@ describe('Jellyfin vertical slice', () => {
   it('normalizes direct play, direct stream, transcode, pause and unknown runtime without idle sessions', async () => {
     const transport = new ReadOnlyTransport('http://jellyfin.test/prefix', 'LABDECK_SECRET_CANARY_7dcf3d', vi.fn(() => response(fixture('sessions'))));
     const result = await new JellyfinAdapter(transport, () => new Date('2026-09-20T10:00:00Z')).playback();
-    expect(result.data.sessions).toHaveLength(3);
-    expect(result.data.sessions.map((session) => [session.playbackMode, session.paused])).toEqual([['direct-play', false], ['direct-stream', true], ['transcode', false]]);
+    expect(result.data.sessions).toHaveLength(4);
+    expect(result.data.sessions.map((session) => [session.playbackMode, session.paused])).toEqual([['direct-play', false], ['direct-stream', true], ['transcode', false], ['unknown', false]]);
     expect(result.data.sessions[0]).toMatchObject({ positionSeconds: 1800, durationSeconds: 7200, progressRatio: 0.25, bitrateBitsPerSecond: null, bitrateSource: null });
     expect(result.data.sessions[2]).toMatchObject({ durationSeconds: null, progressRatio: null, bitrateBitsPerSecond: 2400000, bitrateSource: 'transcode-estimate' });
   });
@@ -24,6 +24,14 @@ describe('Jellyfin vertical slice', () => {
     const result = await new JellyfinAdapter(new ReadOnlyTransport('http://jellyfin.test', 'secret', fetcher), () => new Date()).library();
     expect(result.data.counts).toEqual({ movies: 42, series: 7, episodes: 128 });
     expect(result.data.recent[0]).toMatchObject({ name: 'Fresh Signals', type: 'episode', seriesName: 'Example Station' });
+  });
+
+  it('treats empty playback and library lists as successful zero observations', async () => {
+    const playback = await new JellyfinAdapter(new ReadOnlyTransport('http://jellyfin.test', 'secret', vi.fn(() => response([])))).playback();
+    expect(playback.data.sessions).toEqual([]);
+    const fetcher = vi.fn((url: string | URL | Request) => response((url instanceof Request ? url.url : url.toString()).includes('Counts') ? { MovieCount: 0, SeriesCount: 0, EpisodeCount: 0 } : { Items: [], TotalRecordCount: 0 }));
+    const library = await new JellyfinAdapter(new ReadOnlyTransport('http://jellyfin.test', 'secret', fetcher)).library();
+    expect(library.data).toEqual({ counts: { movies: 0, series: 0, episodes: 0 }, recent: [] });
   });
 
   it('uses only the configured origin/path prefix, GET, fixed queries and header auth', async () => {
@@ -76,6 +84,29 @@ describe('Jellyfin vertical slice', () => {
     state.failure('playback', new SafeTransportError('timeout'), Date.parse(second.observedAt) + 2);
     const stored = database.prepare("SELECT normalized_json FROM capability_state WHERE capability='media.playback'").get() as { normalized_json: string };
     expect(stored.normalized_json).toContain('Two'); expect(stored.normalized_json).not.toContain('LABDECK_SECRET');
+    database.close();
+  });
+
+  it('keeps playback and last-good library data when only the library group fails', () => {
+    const database = openDatabase(':memory:'); const state = new JellyfinStateStore(database); const now = Date.parse('2026-09-20T10:00:00Z');
+    const playback: PlaybackObservation = { observedAt: new Date(now).toISOString(), data: { sessions: [] } };
+    const library: LibraryObservation = { observedAt: new Date(now).toISOString(), data: { counts: { movies: 1, series: 2, episodes: 3 }, recent: [] } };
+    state.success('playback', playback, now); state.success('library', library, now); state.failure('library', new SafeTransportError('timeout'), now + 1);
+    const capabilities = database.prepare("SELECT capability,normalized_json FROM capability_state WHERE instance_id='jellyfin' ORDER BY capability").all() as { capability: string; normalized_json: string }[];
+    expect(capabilities.map((row) => row.capability)).toEqual(['media.library', 'media.playback']);
+    expect(capabilities[0]?.normalized_json).toContain('"movies":1');
+    expect(database.prepare("SELECT safe_error_code FROM poll_state WHERE instance_id='jellyfin' AND group_id='library'").get()).toEqual({ safe_error_code: 'timeout' });
+    expect(database.prepare("SELECT safe_error_code FROM poll_state WHERE instance_id='jellyfin' AND group_id='playback'").get()).toEqual({ safe_error_code: null });
+    database.close();
+  });
+
+  it('persists only safe error codes when an upstream error contains secret text', () => {
+    const database = openDatabase(':memory:'); const state = new JellyfinStateStore(database);
+    state.failure('connection', new Error('upstream rejected LABDECK_SECRET_CANARY_7dcf3d'), Date.parse('2026-09-20T10:00:00Z'));
+    const integration = database.prepare("SELECT connection,safe_error_code FROM integration_state WHERE instance_id='jellyfin'").get();
+    const poll = database.prepare("SELECT safe_error_code FROM poll_state WHERE instance_id='jellyfin' AND group_id='connection'").get();
+    expect(integration).toEqual({ connection: 'unreachable', safe_error_code: 'internal' }); expect(poll).toEqual({ safe_error_code: 'internal' });
+    expect(JSON.stringify({ integration, poll })).not.toContain('LABDECK_SECRET_CANARY_7dcf3d');
     database.close();
   });
 });

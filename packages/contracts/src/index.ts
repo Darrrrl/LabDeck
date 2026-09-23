@@ -36,6 +36,16 @@ const mediaSummarySchema = z.object({
   freshness: freshnessSchema, observedAt: timestampSchema.nullable(), lastSuccessfulRefreshAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
   sessions: z.array(mediaSessionSchema).max(100)
 });
+const connectionSchema = z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']);
+const downloadQueueEntrySchema = z.object({ source: z.enum(['sonarr', 'radarr']), id: z.string(), title: z.string(), sizeBytes: z.number().nonnegative().nullable(), remainingBytes: z.number().nonnegative().nullable(), progressRatio: z.number().min(0).max(1).nullable(), eta: timestampSchema.nullable(), stage: z.enum(['downloading', 'import-pending', 'warning', 'unknown']), warnings: z.array(z.string()).max(5) });
+const upcomingSchema = z.object({ id: z.string(), title: z.string(), date: timestampSchema.nullable(), releaseKind: z.enum(['episode-air', 'digital', 'physical', 'theatrical', 'unknown']) });
+const importSchema = z.object({ id: z.string(), title: z.string(), importedAt: timestampSchema.nullable() });
+const downloadServiceSchema = z.object({
+  id: z.enum(['sonarr', 'radarr']), name: z.string(), browserUrl: z.url(), connection: connectionSchema, freshness: freshnessSchema,
+  observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(), healthWarnings: z.array(z.string()).max(20), queue: z.array(downloadQueueEntrySchema).max(50), queueTotal: z.number().int().nonnegative(), queueTruncated: z.boolean(),
+  catalog: z.object({ monitored: z.number().int().nonnegative(), missing: z.number().int().nonnegative(), upcoming: z.array(upcomingSchema).max(50), upcomingTruncated: z.boolean() }).nullable(),
+  recentImports: z.array(importSchema).max(20)
+});
 export const eventSchema = z.object({ id: z.number().int(), kind: z.string(), severity: z.enum(['info', 'warning', 'critical']), observedAt: timestampSchema, entityId: z.string().nullable(), payload: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])) });
 
 export const overviewResponseSchema = z.discriminatedUnion('configured', [
@@ -43,7 +53,7 @@ export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
     host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(),
-    media: mediaSummarySchema.nullable(), events: z.array(eventSchema).max(10) })
+    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -80,6 +90,9 @@ export const mediaResponseSchema = z.object({
   library: z.object({ freshness: freshnessSchema, observedAt: timestampSchema.nullable(), lastSuccessfulRefreshAt: timestampSchema.nullable(), errorCode: z.string().nullable(), counts: z.object({ movies: z.number().int().nonnegative(), series: z.number().int().nonnegative(), episodes: z.number().int().nonnegative() }).nullable(), recent: z.array(mediaRecentItemSchema).max(20) })
 });
 export type MediaResponse = z.infer<typeof mediaResponseSchema>;
+
+export const downloadsResponseSchema = z.object({ configured: z.boolean(), services: z.array(downloadServiceSchema).max(2) });
+export type DownloadsResponse = z.infer<typeof downloadsResponseSchema>;
 
 const bytesSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const rateSchema = z.number().nonnegative().finite().nullable();

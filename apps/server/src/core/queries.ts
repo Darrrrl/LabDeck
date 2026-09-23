@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { EventsResponse, HostCollectorSnapshot, MediaResponse, MediaSession, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import type { DownloadsResponse, EventsResponse, HostCollectorSnapshot, MediaResponse, MediaSession, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
 
 type Capability = HostCollectorSnapshot['capabilities'][keyof HostCollectorSnapshot['capabilities']];
 type SummaryCapability = HostCollectorSnapshot['capabilities']['summary'];
@@ -13,6 +13,7 @@ type PollRow = { attempted_at: number | null; last_success_at: number | null; sa
 type MediaCapability = { observedAt: string; data: { sessions: MediaSession[] } };
 type LibraryCapability = { observedAt: string; data: { counts: { movies: number; series: number; episodes: number }; recent: { id: string; name: string; type: 'movie' | 'series' | 'episode' | 'other'; seriesName: string | null; addedAt: string | null }[] } };
 interface MediaConfig { id: string; name: string; browserUrl: string }
+interface DownloadConfig { id: 'sonarr' | 'radarr'; name: string; browserUrl: string }
 
 const iso = (value: number | null): string | null => value === null ? null : new Date(value).toISOString();
 const freshness = (observedAt: number | null, now: number): 'fresh' | 'stale' | 'never' => observedAt === null ? 'never' : now - observedAt > 30_000 ? 'stale' : 'fresh';
@@ -28,11 +29,12 @@ export class HostQueries {
     private readonly configured: boolean,
     private readonly historyAvailable: () => boolean,
     private readonly now: () => number = Date.now,
-    private readonly mediaConfig?: MediaConfig
+    private readonly mediaConfig?: MediaConfig,
+    private readonly downloadConfigs: DownloadConfig[] = []
   ) {}
 
   overview(): OverviewResponse {
-    if (!this.configured && !this.mediaConfig) return { configured: false, overall: 'monitoring-incomplete', title: 'No integrations configured', message: 'Configure a supported integration to begin monitoring.' };
+    if (!this.configured && !this.mediaConfig && this.downloadConfigs.length === 0) return { configured: false, overall: 'monitoring-incomplete', title: 'No integrations configured', message: 'Configure a supported integration to begin monitoring.' };
     const integration = this.integration();
     const summaryRow = this.capability('host.summary');
     const filesystemRow = this.capability('host.filesystems');
@@ -45,11 +47,14 @@ export class HostQueries {
     const storage = filesystems?.status === 'ok' ? filesystems.data[0] : undefined;
     const storageStatus = storage && storage.usedRatio >= 0.95 ? 'critical' : storage && storage.usedRatio >= 0.9 ? 'warning' : undefined;
     const media = this.mediaSummary();
-    const mediaProblem = media?.connection === 'auth-error' || media?.connection === 'unreachable';
-    const overall = storageStatus ?? (integration?.connection === 'unreachable' || mediaProblem ? 'warning' : currentFreshness === 'fresh' && (!media || media.freshness === 'fresh') ? 'healthy' : 'monitoring-incomplete');
+    const downloads = this.downloadServices();
+    const serviceProblem = [media?.connection, ...downloads.map((item) => item.connection)].some((connection) => connection === 'auth-error' || connection === 'unreachable');
+    const overall = storageStatus ?? (integration?.connection === 'unreachable' || serviceProblem ? 'warning' : currentFreshness === 'fresh' && (!media || media.freshness === 'fresh') ? 'healthy' : 'monitoring-incomplete');
     const title = overall === 'healthy' ? 'All observed systems healthy' : overall === 'critical' ? 'Critical storage pressure' : overall === 'warning' ? 'Needs attention' : 'Monitoring incomplete';
     const message = media?.connection === 'auth-error' ? 'Jellyfin rejected its configured credentials. Host observations remain available.'
       : media?.connection === 'unreachable' ? 'Jellyfin is unreachable. Showing its last successful observation.'
+      : downloads.some((item) => item.connection === 'auth-error') ? 'A download service rejected its configured credentials. Other observations remain available.'
+      : downloads.some((item) => item.connection === 'unreachable') ? 'A download service is unreachable. Showing its last successful observation.'
       : integration?.connection === 'unreachable'
       ? 'The host collector cannot be read. Showing the last successful observation.'
       : currentFreshness === 'stale' ? 'Host data is stale. Check the collector service and snapshot mount.'
@@ -62,7 +67,7 @@ export class HostQueries {
       storage: storage ? { id: storage.id, path: storage.path, source: storage.source, fsType: storage.fsType, totalBytes: storage.totalBytes, usedBytes: storage.usedBytes, availableBytes: storage.availableBytes, reservedBytes: storage.reservedBytes, usedRatio: storage.usedRatio } : null,
       network: interfaces?.status === 'ok' ? interfaces.data[0] ?? null : null,
       diskIo: blockIo?.status === 'ok' ? blockIo.data[0] ?? null : null,
-      media,
+      media, downloads,
       events: this.events(5).events
     };
   }
@@ -120,6 +125,8 @@ export class HostQueries {
     };
   }
 
+  downloads(): DownloadsResponse { return { configured: this.downloadConfigs.length > 0, services: this.downloadServices() }; }
+
   settings(demoMode: boolean) {
     const integration = this.integration();
     const observedAt = this.capability('host.summary')?.observed_at ?? null;
@@ -127,6 +134,7 @@ export class HostQueries {
       integrations: [
         ...(this.configured ? [{ id: 'host', name: 'Ubuntu host', connection: integration?.connection ?? 'unknown' as const, freshness: freshness(observedAt, this.now()), lastSuccessfulRefreshAt: iso(integration?.succeeded_at ?? null), safeErrorCode: integration?.safe_error_code ?? null }] : []),
         ...(this.mediaConfig ? [{ id: this.mediaConfig.id, name: this.mediaConfig.name, connection: this.integrationFor('jellyfin')?.connection ?? 'unknown' as const, freshness: this.media().playback.freshness, lastSuccessfulRefreshAt: this.media().playback.lastSuccessfulRefreshAt, safeErrorCode: this.integrationFor('jellyfin')?.safe_error_code ?? null }] : [])
+        ,...this.downloadConfigs.map((config) => { const integrationState = this.integrationFor(config.id); const queue = this.capabilityFor(config.id, 'downloads.queue'); return { id: config.id, name: config.name, connection: integrationState?.connection ?? 'unknown' as const, freshness: freshnessWith(queue?.observed_at ?? null, this.now(), 45_000), lastSuccessfulRefreshAt: iso(integrationState?.succeeded_at ?? null), safeErrorCode: integrationState?.safe_error_code ?? null }; })
       ],
       authentication: 'configured' as const, demoMode, version: '0.2.0',
       hostCollector: { configured: this.configured, historyAvailable: this.historyAvailable(), message: this.configured ? 'Reading the configured snapshot file. The application has no host command or privilege path.' : 'Set LABDECK_HOST_SNAPSHOT_PATH and mount the collector public directory read-only.' }
@@ -162,6 +170,13 @@ export class HostQueries {
     const media = this.media();
     return { id: this.mediaConfig.id, name: this.mediaConfig.name, browserUrl: this.mediaConfig.browserUrl, connection: media.connection, freshness: media.playback.freshness, observedAt: media.playback.observedAt, lastSuccessfulRefreshAt: media.playback.lastSuccessfulRefreshAt, errorCode: media.playback.errorCode, sessions: media.playback.sessions };
   }
+
+  private downloadServices(): DownloadsResponse['services'] { return this.downloadConfigs.map((config) => {
+    const integration = this.integrationFor(config.id); const queueRow = this.capabilityFor(config.id, 'downloads.queue'); const healthRow = this.capabilityFor(config.id, 'downloads.health'); const catalogRow = this.capabilityFor(config.id, 'downloads.catalog'); const historyRow = this.capabilityFor(config.id, 'downloads.history');
+    const queue = parseJson<{ data: { entries: DownloadsResponse['services'][number]['queue']; total: number; truncated: boolean } }>(queueRow?.normalized_json);
+    const health = parseJson<{ data: { warnings: string[] } }>(healthRow?.normalized_json); const catalog = parseJson<{ data: NonNullable<DownloadsResponse['services'][number]['catalog']> }>(catalogRow?.normalized_json); const history = parseJson<{ data: { imports: DownloadsResponse['services'][number]['recentImports'] } }>(historyRow?.normalized_json); const poll = this.poll(config.id, 'queue');
+    return { id: config.id, name: config.name, browserUrl: config.browserUrl, connection: integration?.connection ?? 'unknown', freshness: freshnessWith(queueRow?.observed_at ?? null, this.now(), 45_000), observedAt: iso(queueRow?.observed_at ?? null), errorCode: poll?.safe_error_code ?? null, healthWarnings: health?.data.warnings ?? [], queue: queue?.data.entries ?? [], queueTotal: queue?.data.total ?? 0, queueTruncated: queue?.data.truncated ?? false, catalog: catalog?.data ?? null, recentImports: history?.data.imports ?? [] };
+  }); }
 
   capability(name: string): CapabilityRow | undefined {
     return this.database.prepare('SELECT observed_at, normalized_json FROM capability_state WHERE instance_id = ? AND capability = ?').get('host', name) as CapabilityRow | undefined;

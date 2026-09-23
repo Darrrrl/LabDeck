@@ -1,0 +1,18 @@
+import { useQuery } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react';
+import { getDownloads } from '../../app/api.js';
+import { bytes, relativeTime } from '../../components/format.js';
+import { Status } from '../../components/Status.js';
+
+export function DownloadsPage() { const query = useQuery({ queryKey: ['downloads'], queryFn: getDownloads, refetchInterval: 15_000, refetchIntervalInBackground: false }); return <main id="main-content" tabIndex={-1}>
+  <header className="page-header"><div><p className="eyebrow">DOWNLOADS</p><h1>Managed downloads</h1></div></header>
+  {query.isPending ? <div className="panel loading-panel"><span className="skeleton" /></div> : null}{query.isError ? <div className="notice" role="alert"><Status tone="critical">Unavailable</Status><h2>Download state could not be loaded</h2></div> : null}
+  {query.data && !query.data.configured ? <section className="empty-state"><Status tone="unknown">Not configured</Status><h2>No download services configured</h2><p>Add Sonarr or Radarr through server-side configuration.</p></section> : null}
+  {query.data?.services.map((service) => <section className="panel download-service" key={service.id}><div className="section-heading"><div><h2>{service.name}</h2><p>{service.errorCode ? `Queue refresh failed (${service.errorCode}); showing last-good data.` : `Observed ${relativeTime(service.observedAt)}.`}</p></div><div className="summary-action"><Status tone={service.connection === 'reachable' ? service.healthWarnings.length ? 'warning' : 'healthy' : service.connection === 'unknown' ? 'unknown' : 'warning'}>{service.connection === 'auth-error' ? 'Credentials rejected' : service.connection}</Status><a className="text-link" href={service.browserUrl} target="_blank" rel="noreferrer">Open {service.name}<ExternalLink size={14} /></a></div></div>
+    {service.healthWarnings.map((warning, index) => <p className="form-error" key={`${warning}:${index}`}>{warning}</p>)}
+    <div className="library-counts"><Metric label="Queue entries" value={service.queueTotal} /><Metric label="Monitored" value={service.catalog?.monitored ?? null} /><Metric label="Missing" value={service.catalog?.missing ?? null} /></div>
+    <h3>Queue{service.queueTruncated ? ' · showing first 50' : ''}</h3>{service.queue.length ? <div className="queue-list">{service.queue.map((item) => <article key={`${item.source}:${item.id}`}><div><strong>{item.title}</strong><small>{item.source} · {item.stage.replace('-', ' ')}</small></div><div><span>{item.progressRatio === null ? 'Progress unknown' : `${Math.round(item.progressRatio * 100)}%`}</span><small>{item.remainingBytes === null ? 'Remaining unknown' : `${bytes(item.remainingBytes)} remaining`}</small></div></article>)}</div> : <p className="muted">Nothing downloading.</p>}
+    <div className="download-columns"><div><h3>Upcoming{service.catalog?.upcomingTruncated ? ' · first 50' : ''}</h3>{service.catalog?.upcoming.length ? <ul className="recent-media">{service.catalog.upcoming.map((item) => <li key={item.id}><span><strong>{item.title}</strong><small>{item.releaseKind.replace('-', ' ')}</small></span><time>{relativeTime(item.date)}</time></li>)}</ul> : <p className="muted">No upcoming items reported.</p>}</div><div><h3>Recent imports</h3>{service.recentImports.length ? <ul className="recent-media">{service.recentImports.map((item) => <li key={item.id}><strong>{item.title}</strong><time>{relativeTime(item.importedAt)}</time></li>)}</ul> : <p className="muted">No imports reported.</p>}</div></div>
+  </section>)}
+  </main>; }
+function Metric({ label, value }: { label: string; value: number | null }) { return <div><span>{label}</span><strong>{value === null ? '—' : value.toLocaleString()}</strong></div>; }

@@ -1,0 +1,11 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_SONARR_BASE_URL: ${LABDECK_SONARR_BASE_URL:?set the internal Sonarr API base URL}
+      LABDECK_SONARR_BROWSER_URL: ${LABDECK_SONARR_BROWSER_URL:?set the browser-reachable Sonarr URL}
+      LABDECK_SONARR_API_KEY_FILE: /run/secrets/sonarr_api_key
+    volumes:
+      - type: bind
+        source: ${LABDECK_SONARR_API_KEY_FILE:?set the host Sonarr API key file}
+        target: /run/secrets/sonarr_api_key
+        read_only: true

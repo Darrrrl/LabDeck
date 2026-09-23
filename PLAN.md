@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M3 implementation complete; M2 Ubuntu and M3 Jellyfin live evidence pending; M4–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M4 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, and M4 Arr live evidence pending; M5–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -70,7 +70,7 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 
 ## M3 — Jellyfin and first usable release
 
-**Status:** M3.1–M3.3 fixture implementation complete 2026-09-20. Live installed-version, credential, and path-prefix compatibility remains explicitly pending; see [M3 validation report](docs/plans/m3-validation-report.md).
+**Status:** M3.1–M3.3 fixture implementation complete 2026-09-20 and acceptance coverage hardened 2026-09-23. Live installed-version, credential, and path-prefix compatibility remains explicitly pending; see [M3 validation report](docs/plans/m3-validation-report.md).
 
 **Goal:** Real Jellyfin activity and library counts appear alongside host health without weakening failure isolation.
 
@@ -91,6 +91,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M2; source/version verification gates in service notes. This is the first usable release checkpoint; wider service coverage is not claimed yet.
 
 ## M4 — Sonarr then Radarr vertical slices
+
+**Status:** M4.1–M4.4 fixture implementation complete 2026-09-23. Installed Sonarr/Radarr version, enum and filter compatibility remains explicitly pending; see [M4 validation report](docs/plans/m4-validation-report.md).
 
 **Goal:** Summarize managed downloads and recent imports with shared mechanics but correct service-specific semantics.
 

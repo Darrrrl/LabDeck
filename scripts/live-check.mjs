@@ -4,11 +4,13 @@ import { hostname, platform } from 'node:os';
 import { resolve } from 'node:path';
 
 const provider = process.argv.find((argument) => argument.startsWith('--provider='))?.slice('--provider='.length);
-if (!['host', 'jellyfin'].includes(provider)) {
-  console.error('Usage: npm run test:live -- --provider=host|jellyfin');
+if (!['host', 'jellyfin', 'sonarr', 'radarr'].includes(provider)) {
+  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr');
   process.exitCode = 1;
 } else if (provider === 'jellyfin') {
   await checkJellyfin();
+} else if (provider === 'sonarr' || provider === 'radarr') {
+  await checkArr(provider);
 } else if (process.env.LABDECK_LIVE_TEST !== 'true') {
   console.log('SKIP host live validation: set LABDECK_LIVE_TEST=true after reviewing the collector setup.');
 } else if (platform() !== 'linux') {
@@ -82,6 +84,21 @@ async function jellyfinGet(path, query, baseUrl, key) {
     const body = await response.text(); assert(Buffer.byteLength(body) <= 2 * 1024 * 1024, 'Jellyfin body exceeds 2MiB'); return JSON.parse(body);
   } finally { clearTimeout(timer); }
 }
+
+async function checkArr(kind) {
+  if (process.env.LABDECK_LIVE_TEST !== 'true') { console.log(`SKIP ${kind} live validation: set LABDECK_LIVE_TEST=true after reviewing read paths and privacy content.`); return; }
+  const prefix = `LABDECK_${kind.toUpperCase()}`; const base = process.env[`${prefix}_BASE_URL`]; const keyFile = process.env[`${prefix}_API_KEY_FILE`]; if (!base || !keyFile) throw new Error(`${prefix}_BASE_URL and ${prefix}_API_KEY_FILE are required`);
+  const baseUrl = new URL(base); assert(['http:', 'https:'].includes(baseUrl.protocol) && !baseUrl.username && !baseUrl.password && !baseUrl.search && !baseUrl.hash, `invalid ${kind} base URL`);
+  const keyPath = resolve(keyFile); const keyStat = lstatSync(keyPath); assert(keyStat.isFile() && !keyStat.isSymbolicLink() && (keyStat.mode & 0o007) === 0, `${kind} key must be a restricted regular non-symlink file`); const key = readFileSync(keyPath, 'utf8').trim(); assert(key && key.length <= 512 && !/[\r\n]/.test(key), `invalid ${kind} API key`);
+  const get = (path, query = {}) => arrGet(path, query, baseUrl, key); const status = await get('/api/v3/system/status'); assert(typeof status?.version === 'string', `${kind} version missing`); assert(Array.isArray(await get('/api/v3/health')), `${kind} health is not an array`);
+  const queue = await get('/api/v3/queue', { page: '1', pageSize: '100', [kind === 'sonarr' ? 'includeUnknownSeriesItems' : 'includeUnknownMovieItems']: 'true' }); assert(Array.isArray(queue?.records) && Number.isSafeInteger(queue?.totalRecords), `${kind} queue page invalid`);
+  assert(Array.isArray(await get(kind === 'sonarr' ? '/api/v3/series' : '/api/v3/movie')), `${kind} catalog invalid`); const missing = await get('/api/v3/wanted/missing', { page: '1', pageSize: '1', monitored: 'true' }); assert(Number.isSafeInteger(missing?.totalRecords), `${kind} missing total invalid`);
+  const now = new Date(); const end = new Date(now.valueOf() + 14 * 86400_000); assert(Array.isArray(await get('/api/v3/calendar', { start: now.toISOString(), end: end.toISOString(), unmonitored: 'false', [kind === 'sonarr' ? 'includeSeries' : 'includeMovie']: 'true' })), `${kind} calendar invalid`);
+  const history = await get('/api/v3/history', { page: '1', pageSize: '100', sortKey: 'date', sortDirection: 'descending', eventType: 'downloadFolderImported' }); assert(Array.isArray(history?.records), `${kind} history invalid`);
+  console.log(`PASS ${kind} live validation: version ${status.version}; fixed v3 reads, header authentication, path prefix, queue, health, catalog, missing, calendar and history succeeded.`); console.log('NOTE titles, warnings, origins and credentials are intentionally omitted.');
+}
+async function arrGet(path, query, baseUrl, key) { const url = new URL(`${baseUrl.toString().replace(/\/$/, '')}/${path.slice(1)}`); for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value); const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 5_000); try { const response = await fetch(url, { method: 'GET', redirect: 'error', signal: controller.signal, headers: { Accept: 'application/json', 'X-Api-Key': key } }); assert(response.ok, response.status === 401 || response.status === 403 ? `${kindLabel(baseUrl)} credentials rejected` : `Arr read failed with status ${response.status}`); const body = await response.text(); assert(Buffer.byteLength(body) <= 2 * 1024 * 1024, 'Arr body exceeds 2MiB'); return JSON.parse(body); } finally { clearTimeout(timer); } }
+function kindLabel(baseUrl) { return baseUrl.hostname || 'Arr'; }
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function near(actual, expected, tolerance, label) {

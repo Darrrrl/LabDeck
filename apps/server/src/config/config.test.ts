@@ -40,4 +40,10 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ LABDECK_JELLYFIN_BASE_URL: 'http://user:pass@jellyfin.test', LABDECK_JELLYFIN_BROWSER_URL: 'https://media.test', LABDECK_JELLYFIN_API_KEY_FILE: keyPath })).toThrow(/without credentials/);
     expect(() => loadConfig({ LABDECK_JELLYFIN_BASE_URL: 'http://169.254.1.2', LABDECK_JELLYFIN_BROWSER_URL: 'https://media.test', LABDECK_JELLYFIN_API_KEY_FILE: keyPath })).toThrow(/link-local metadata/);
   });
+
+  it('loads Sonarr and Radarr independently from restricted key files', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'labdeck-arr-config-')); const sonarrKey = join(directory, 'sonarr'); const radarrKey = join(directory, 'radarr'); writeFileSync(sonarrKey, 'sonarr-secret', { mode: 0o600 }); writeFileSync(radarrKey, 'radarr-secret', { mode: 0o600 });
+    const config = loadConfig({ LABDECK_SONARR_BASE_URL: 'http://sonarr.test/base', LABDECK_SONARR_BROWSER_URL: 'https://sonarr.test/ui', LABDECK_SONARR_API_KEY_FILE: sonarrKey, LABDECK_RADARR_BASE_URL: 'http://radarr.test/base', LABDECK_RADARR_BROWSER_URL: 'https://radarr.test/ui', LABDECK_RADARR_API_KEY_FILE: radarrKey });
+    expect(config.arr).toEqual([{ id: 'sonarr', kind: 'sonarr', name: 'Sonarr', baseUrl: 'http://sonarr.test/base', browserUrl: 'https://sonarr.test/ui', apiKey: 'sonarr-secret' }, { id: 'radarr', kind: 'radarr', name: 'Radarr', baseUrl: 'http://radarr.test/base', browserUrl: 'https://radarr.test/ui', apiKey: 'radarr-secret' }]);
+  });
 });

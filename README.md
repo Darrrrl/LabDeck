@@ -2,7 +2,7 @@
 
 A local-first, read-only mission control for an Ubuntu homelab. The intended experience is a calm, polished overview of host health, storage, media activity, containers, and remote access.
 
-**Status: M2 host-health implementation complete; Ubuntu live evidence pending.** LabDeck provides owner authentication, host health and capacity collection, cached trends/events, polished Overview/System/Storage views, read-only settings diagnostics, and hardened Compose packaging. Jellyfin begins in M3.
+**Status: M4 fixture implementation complete; Ubuntu host and live provider evidence pending.** LabDeck provides owner authentication, host health and capacity collection, cached trends/events, Jellyfin playback/library summaries, Sonarr/Radarr queue and catalog summaries, polished Overview/System/Storage/Media/Downloads views, read-only settings diagnostics, and hardened Compose packaging.
 
 Start with [PRODUCT.md](PRODUCT.md), then [ARCHITECTURE.md](ARCHITECTURE.md) and [PLAN.md](PLAN.md). Coding agents should read [AGENTS.md](AGENTS.md).
 
@@ -39,6 +39,6 @@ npm run dev
 
 Vite serves the browser at `http://127.0.0.1:5173` and proxies API requests to `127.0.0.1:7337`. Demo mode permits non-Secure development cookies only on loopback and displays a persistent banner. Production requires HTTPS and Secure cookies.
 
-Run `npm run check`, `npm run test:unit`, `npm run test:integration -- --project=foundation`, and `npm run test:integration -- --project=host` for normal checks. The live host check is opt-in and Ubuntu-only. See [Compose deployment](deploy/compose/README.md) for a private HTTPS deployment.
+Run `npm run check`, `npm run test:unit`, `npm run test:integration -- --project=foundation`, `npm run test:integration -- --project=host`, `npm run test:integration -- --project=jellyfin`, and `npm run test:integration -- --project=arr` for normal checks. Live host and provider checks are explicit opt-ins; the host check is Ubuntu-only and provider checks require out-of-band key files. See [Compose deployment](deploy/compose/README.md) for a private HTTPS deployment.
 
 The module tree in ARCHITECTURE.md remains incremental: add paths only when their milestone needs them.

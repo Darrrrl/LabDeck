@@ -18,6 +18,8 @@ Verify: key permissions; multiple users/devices; paused/transcode/direct stream 
 
 ## Sonarr and Radarr
 
+M4 implements the API v3 read paths below with fixed-route `X-Api-Key` authentication, bounded local pagination and immediate normalized projection. Sonarr and Radarr share transport, queue, health and history mechanics while retaining service-specific catalog and release-date mapping. Synthetic fixtures validate behavior only; installed-version semantics remain a live gate.
+
 Share HTTP transport, `X-Api-Key` auth handling, queue pagination, health warning mapping and history cursor machinery. Keep series/movie catalog mapping and release semantics separate. Both use API v3 routes in the current published specifications: [Sonarr OpenAPI](https://raw.githubusercontent.com/Sonarr/Sonarr/develop/src/Sonarr.Api.V3/openapi.json), [Radarr OpenAPI](https://raw.githubusercontent.com/Radarr/Radarr/develop/src/Radarr.Api.V3/openapi.json). The API version number is not the application major version.
 
 Candidate route set: `/api/v3/system/status`, `/health`, `/queue`, `/history`, `/calendar`, `/wanted/missing` beneath `/api/v3`; catalog is `/series` for Sonarr and `/movie` for Radarr. Verify wanted filtering and totals on each installed version. Limit upcoming items to 14 days, visible results to 50; retain authoritative total and indicate truncation.

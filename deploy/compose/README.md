@@ -47,3 +47,21 @@ docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.j
 ```
 
 The application performs only bounded `GET` requests to system info, sessions, item counts, and a twelve-item recent-additions query. It does not follow redirects or expose the API key to the browser, database, logs, or URL query strings. Add explicit network membership if the service name is on another Compose network; do not publish Jellyfin merely for LabDeck.
+
+## Sonarr and Radarr monitoring
+
+Store each API key in its own restricted host file and add either or both provider overrides. Internal API and browser launch URLs are intentionally separate and may include reverse-proxy path prefixes.
+
+```sh
+LABDECK_SONARR_BASE_URL=http://sonarr:8989/sonarr \
+LABDECK_SONARR_BROWSER_URL=https://sonarr.example-tailnet.ts.net/sonarr \
+LABDECK_SONARR_API_KEY_FILE=/secure/path/sonarr-api-key \
+docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.sonarr.yml config --quiet
+
+LABDECK_RADARR_BASE_URL=http://radarr:7878/radarr \
+LABDECK_RADARR_BROWSER_URL=https://radarr.example-tailnet.ts.net/radarr \
+LABDECK_RADARR_API_KEY_FILE=/secure/path/radarr-api-key \
+docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.radarr.yml config --quiet
+```
+
+These adapters issue only fixed API v3 `GET` requests. They never invoke command, search, grab, delete, refresh, or test endpoints.

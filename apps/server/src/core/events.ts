@@ -7,7 +7,7 @@ export interface EventCandidate {
   severity: 'info' | 'warning' | 'critical';
   occurredAt?: number;
   observedAt: number;
-  origin: 'observed' | 'threshold';
+  origin: 'upstream' | 'observed' | 'threshold';
   dedupeKey: string;
   payload: Record<string, string | number | boolean | null>;
 }

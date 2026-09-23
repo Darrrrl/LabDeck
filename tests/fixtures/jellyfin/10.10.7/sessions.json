@@ -2,5 +2,6 @@
   {"Id":"session-direct","UserName":"Mira","NowPlayingItem":{"Id":"movie-1","Name":"The Synthetic Voyage","Type":"Movie","RunTimeTicks":72000000000},"PlayState":{"PositionTicks":18000000000,"IsPaused":false,"PlayMethod":"DirectPlay"}},
   {"Id":"session-stream","UserName":"Noah","NowPlayingItem":{"Id":"episode-1","Name":"A Quiet Packet","SeriesName":"Example Station","Type":"Episode","RunTimeTicks":36000000000},"PlayState":{"PositionTicks":9000000000,"IsPaused":true,"PlayMethod":"DirectStream"}},
   {"Id":"session-transcode","UserName":"Iris","NowPlayingItem":{"Id":"movie-2","Name":"Bounded Horizons","Type":"Movie"},"PlayState":{"IsPaused":false,"PlayMethod":"Transcode"},"TranscodingInfo":{"Bitrate":2400000}},
+  {"Id":"session-unknown","UserName":"Kai","NowPlayingItem":{"Id":"movie-3","Name":"Unmapped Method","Type":"Movie","RunTimeTicks":54000000000},"PlayState":{"PositionTicks":3000000000,"IsPaused":false,"PlayMethod":"FutureMethod"}},
   {"Id":"idle-session","UserName":"Mira"}
 ]
