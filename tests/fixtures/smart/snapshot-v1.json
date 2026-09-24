@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "generatedAt": "2026-09-24T10:00:00Z",
+  "disks": [
+    {
+      "id": "disk-a", "label": "Data disk", "state": "ok", "observedAt": "2026-09-24T10:00:00Z",
+      "identity": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "serialSuffix": "1234", "protocol": "ATA", "model": "Synthetic ATA",
+      "capacityBytes": 1000000000000, "temperatureCelsius": 40, "health": "passed", "powerOnHours": 1000,
+      "ata": {"reallocated": "2", "pending": "0", "uncorrectable": "0"}, "nvme": null, "scsi": null
+    },
+    {
+      "id": "disk-b", "label": "Cache disk", "state": "ok", "observedAt": "2026-09-24T10:00:00Z",
+      "identity": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "serialSuffix": "5678", "protocol": "NVME", "model": "Synthetic NVMe",
+      "capacityBytes": 2000000000000, "temperatureCelsius": null, "health": "passed", "powerOnHours": 50,
+      "ata": null, "nvme": {"criticalWarning": 0, "availableSparePercent": 99, "percentageUsed": 1, "mediaErrors": "0", "errorLogEntries": "0"}, "scsi": null
+    }
+  ]
+}

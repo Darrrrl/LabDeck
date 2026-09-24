@@ -46,6 +46,8 @@ Define only capabilities a completed slice uses: `host.summary`, `host.filesyste
 
 Provider contexts receive narrow dependencies, not DB handles or an unrestricted HTTP client. Host adapter reads validated local snapshots instead of receiving a network transport. All instances use the same outcome envelope. An unexpected thrown adapter error is caught at the scheduler boundary and converted to a safe failure.
 
+M6 Docker snapshots contain only a bounded, projected inventory and nullable per-container stats with their own observation timestamps; a partial inventory cannot prove removal. M7 SMART snapshots are a separate versioned, atomic file produced by a root one-shot timer. The app reads that sanitized file only; it has no raw-device path or helper command channel. Disk state is `ok | asleep | unsupported | permission-denied | timeout | read-failed`, independent from SMART health `passed | warning | failed | unknown`. A non-`ok` read preserves prior measurements and their original evidence timestamp while reporting the current state/time. Physical-disk capacity is never added to filesystem capacity. Counters that may exceed JavaScript's safe integer range are decimal strings; missing is unknown, not zero. See [hardware gate](smart-hardware.md).
+
 ## State and freshness
 
 Persist `lastAttemptAt`, `lastSuccessAt` and `lastErrorCode` per poll group, plus last good observation time per capability. Public fields include `observedAt`, `lastSuccessfulRefreshAt`, `nextExpectedAt`, and derived freshness (`fresh | stale | never`). A fresh file read does not refresh old collector data; use the collector's sample timestamp.

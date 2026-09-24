@@ -1,0 +1,10 @@
+{
+  "smartctl": {"exit_status": 0}, "device": {"protocol": "NVMe"},
+  "model_name": "Example NVMe", "serial_number": "SYNTHETIC-NVME-5678",
+  "user_capacity": {"bytes": 2000000000000}, "smart_status": {"passed": true},
+  "nvme_smart_health_information_log": {
+    "critical_warning": 1, "temperature": 48, "available_spare": 92,
+    "percentage_used": 8, "media_errors": "18446744073709551615",
+    "num_err_log_entries": 2, "power_on_hours": 1234
+  }
+}

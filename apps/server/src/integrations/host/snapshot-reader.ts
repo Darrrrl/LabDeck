@@ -31,7 +31,7 @@ export function readHostSnapshot(path: string, now = Date.now()): HostCollectorS
     try { decoded = JSON.parse(bytes.toString('utf8')); } catch { throw new SnapshotReadError('invalid-response'); }
     const parsed = hostCollectorSnapshotSchema.safeParse(decoded);
     if (!parsed.success) throw new SnapshotReadError('invalid-response');
-    const timestamps = [parsed.data.generatedAt, ...Object.values(parsed.data.capabilities).map((capability) => capability.observedAt)];
+    const timestamps = [parsed.data.generatedAt, ...Object.values(parsed.data.capabilities).filter((capability) => capability !== undefined).map((capability) => capability.observedAt)];
     if (timestamps.some((timestamp) => Date.parse(timestamp) > now + MAXIMUM_FUTURE_SKEW_MS)) {
       throw new SnapshotReadError('future-timestamp');
     }

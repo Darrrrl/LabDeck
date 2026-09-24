@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 type Filesystem struct {
@@ -18,13 +19,22 @@ type Entity struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
+type SmartDisk struct {
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	Path       string `json:"path"`
+	DeviceType string `json:"deviceType"`
+}
 type Config struct {
-	HostID          string       `json:"hostId"`
-	OutputDirectory string       `json:"outputDirectory"`
-	IntervalSeconds int          `json:"intervalSeconds"`
-	Filesystems     []Filesystem `json:"filesystems"`
-	Interfaces      []Entity     `json:"interfaces"`
-	BlockDevices    []Entity     `json:"blockDevices"`
+	HostID               string       `json:"hostId"`
+	OutputDirectory      string       `json:"outputDirectory"`
+	IntervalSeconds      int          `json:"intervalSeconds"`
+	Filesystems          []Filesystem `json:"filesystems"`
+	Interfaces           []Entity     `json:"interfaces"`
+	BlockDevices         []Entity     `json:"blockDevices"`
+	Docker               bool         `json:"docker"`
+	SmartOutputDirectory string       `json:"smartOutputDirectory"`
+	SmartDisks           []SmartDisk  `json:"smartDisks"`
 }
 
 var safeID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
@@ -108,6 +118,27 @@ func (c *Config) Validate() error {
 			}
 			ids[item.ID] = true
 		}
+	}
+	if len(c.SmartDisks) > 16 {
+		return errors.New("too many SMART disks")
+	}
+	if len(c.SmartDisks) > 0 && (!filepath.IsAbs(c.SmartOutputDirectory) || filepath.Clean(c.SmartOutputDirectory) == filepath.Clean(c.OutputDirectory)) {
+		return errors.New("SMART output directory must be separate and absolute")
+	}
+	pathsSmart := map[string]bool{}
+	for _, item := range c.SmartDisks {
+		if !safeID.MatchString(item.ID) || ids[item.ID] || len(item.Label) > 128 || item.Path == "" || !filepath.IsAbs(item.Path) || !strings.HasPrefix(item.Path, "/dev/disk/by-id/") || filepath.Clean(item.Path) != item.Path || pathsSmart[item.Path] {
+			return errors.New("SMART disk identity, label or path is invalid")
+		}
+		if strings.ContainsAny(item.Label, "\r\n\x00") {
+			return errors.New("SMART disk label is invalid")
+		}
+		switch item.DeviceType {
+		case "auto", "ata", "nvme", "scsi", "sat":
+		default:
+			return errors.New("SMART device type is unsupported")
+		}
+		ids[item.ID], pathsSmart[item.Path] = true, true
 	}
 	return nil
 }

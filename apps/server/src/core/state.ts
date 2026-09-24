@@ -5,6 +5,7 @@ import { persistMetrics, type MetricObservation } from './metrics.js';
 
 const HOST_INSTANCE = 'host';
 const HOST_GROUP = 'snapshot';
+type DockerCapability = NonNullable<HostCollectorSnapshot['capabilities']['docker']>;
 
 function observations(snapshot: HostCollectorSnapshot): MetricObservation[] {
   const result: MetricObservation[] = [];
@@ -51,6 +52,12 @@ function previousFilesystemRatios(database: Database.Database): Map<string, numb
   } catch { return new Map(); }
 }
 
+function previousDocker(database: Database.Database): DockerCapability | undefined {
+  const row = database.prepare(`SELECT normalized_json FROM capability_state WHERE instance_id='host' AND capability='containers.inventory'`).get() as { normalized_json: string } | undefined;
+  if (!row) return undefined;
+  try { return JSON.parse(row.normalized_json) as DockerCapability; } catch { return undefined; }
+}
+
 export class HostStateStore {
   constructor(private readonly database: Database.Database) {}
 
@@ -69,13 +76,22 @@ export class HostStateStore {
       const previous = this.database.prepare('SELECT consecutive_failures, succeeded_at FROM integration_state WHERE instance_id = ?')
         .get(HOST_INSTANCE) as { consecutive_failures: number; succeeded_at: number | null } | undefined;
       const oldRatios = previousFilesystemRatios(this.database);
+      const oldDocker = previousDocker(this.database);
       for (const [name, capability] of Object.entries(snapshot.capabilities)) {
-        if (capability.status !== 'ok') continue;
+        if (!capability || capability.status !== 'ok') continue;
+        if (name === 'docker' && oldDocker?.observedAt === capability.observedAt) continue;
         this.database.prepare(`INSERT INTO capability_state(instance_id, capability, schema_version, observed_at, succeeded_at, normalized_json)
           VALUES (?, ?, '1', ?, ?, ?)
           ON CONFLICT(instance_id, capability) DO UPDATE SET schema_version = excluded.schema_version,
           observed_at = excluded.observed_at, succeeded_at = excluded.succeeded_at, normalized_json = excluded.normalized_json`)
-          .run(HOST_INSTANCE, `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(capability));
+          .run(HOST_INSTANCE, name === 'docker' ? 'containers.inventory' : `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(capability));
+      }
+
+      const docker = snapshot.capabilities.docker;
+      if (docker?.status === 'error') this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,attempted_at,safe_error_code) VALUES ('host','docker',?,?) ON CONFLICT(instance_id,group_id) DO UPDATE SET attempted_at=excluded.attempted_at,safe_error_code=excluded.safe_error_code`).run(attemptedAt, docker.errorCode);
+      else if (docker?.status === 'ok' && oldDocker?.observedAt !== docker.observedAt) {
+        this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,last_success_at,attempted_at,safe_error_code) VALUES ('host','docker',?,?,NULL) ON CONFLICT(instance_id,group_id) DO UPDATE SET last_success_at=excluded.last_success_at,attempted_at=excluded.attempted_at,safe_error_code=NULL`).run(attemptedAt, attemptedAt);
+        this.#dockerEvents(docker, oldDocker, attemptedAt);
       }
 
       this.database.prepare(`INSERT INTO poll_state(instance_id, group_id, generation, sequence, last_success_at)
@@ -139,6 +155,22 @@ export class HostStateStore {
           observedAt: now, origin: 'threshold', dedupeKey: `host:storage-recovered:${filesystem.id}:${snapshot.generation}:${snapshot.sequence}`,
           payload: { filesystemId: filesystem.id, usedRatio: filesystem.usedRatio }
         });
+      }
+    }
+  }
+
+  #dockerEvents(current: DockerCapability, previous: DockerCapability | undefined, now: number): void {
+    if (current.status !== 'ok' || previous?.status !== 'ok') return;
+    const oldById = new Map(previous.data.containers.map((item) => [item.id, item]));
+    const oldByName = new Map(previous.data.containers.map((item) => [item.name, item.id]));
+    for (const item of current.data.containers) {
+      const before = oldById.get(item.id);
+      if (before && item.restartCount !== null && before.restartCount !== null && item.restartCount > before.restartCount) {
+        persistEvent(this.database, { instanceId: 'host', entityId: `container:${item.id}`, kind: 'container.restart-observed', severity: 'warning', observedAt: now, origin: 'observed', dedupeKey: `host:container:restart:${item.id}:${item.restartCount}`, payload: { name: item.name, restartCount: item.restartCount } });
+      }
+      const replacedId = oldByName.get(item.name);
+      if (!before && replacedId && replacedId !== item.id && current.data.inventoryComplete && previous.data.inventoryComplete) {
+        persistEvent(this.database, { instanceId: 'host', entityId: `container:${item.id}`, kind: 'container.recreated-observed', severity: 'info', observedAt: now, origin: 'observed', dedupeKey: `host:container:recreated:${item.id}`, payload: { name: item.name } });
       }
     }
   }

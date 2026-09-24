@@ -35,6 +35,8 @@ docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.h
 
 Review the rendered configuration before starting it. The override adds a supplemental read-only group and mounts only the collector's sanitized public directory at `/run/labdeck-host:ro`; it does not expose host `/proc`, `/sys`, raw devices, or a daemon socket.
 
+For optional SMART evidence, first install the separate host timer described in [systemd setup](../systemd/README.md), then add `-f deploy/compose/compose.smart.yml` alongside the host override. The SMART override only points the app at `/run/labdeck-host/smart/snapshot.json` inside that same read-only sanitized snapshot mount. Do not mount `/dev`, `/sys`, or a Docker socket into the app.
+
 ## Jellyfin monitoring
 
 Create a dedicated Jellyfin API key and store only its value in a host file readable by container UID/GID `10001:10001`, mode `0440`. Configure the internal API base URL separately from the browser URL; both may include a reverse-proxy path prefix. The browser URL is only used for the “Open Jellyfin” link.

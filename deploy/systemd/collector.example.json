@@ -11,5 +11,8 @@
   ],
   "blockDevices": [
     { "id": "system-disk", "name": "sda" }
-  ]
+  ],
+  "docker": false,
+  "smartOutputDirectory": "/var/lib/labdeck-collector/public/smart",
+  "smartDisks": []
 }

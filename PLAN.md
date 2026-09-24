@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M5 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, M4 Arr, and M5 Prowlarr live evidence pending; M6–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M7 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, M4 Arr, M5 Prowlarr, M6 Docker, and M7 SMART live evidence pending; M8–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -136,6 +136,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 
 ## M6 — Docker observation
 
+**Status:** M6.1–M6.3 fixture implementation complete 2026-09-24. Installed Engine API, socket permissions, and 50-container host performance remain live gates; see [M6 validation report](docs/plans/m6-validation-report.md).
+
 **Goal:** Safe collector output powers container inventory/detail without exposing daemon access to the application.
 
 **Scope/tasks:**
@@ -155,6 +157,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M5 in release sequence; technically uses M2's collector protocol/core. Socket privilege is opt-in, never silently added.
 
 ## M7 — polished storage and SMART
+
+**Status:** M7.1–M7.3 fixture implementation complete 2026-09-24. M7.4 remains a live Ubuntu hardware/permissions gate; see [M7 validation report](docs/plans/m7-validation-report.md).
 
 **Goal:** Make capacity and disk evidence useful and trustworthy while isolating elevated device access.
 

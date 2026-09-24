@@ -40,6 +40,14 @@ export default defineConfig({
       {
         extends: true,
         test: { name: 'prowlarr', include: ['apps/**/*.prowlarr.integration.test.ts'] }
+      },
+      {
+        extends: true,
+        test: { name: 'docker', include: ['apps/**/*.docker.integration.test.ts'] }
+      },
+      {
+        extends: true,
+        test: { name: 'smart', include: ['apps/**/*.smart.integration.test.ts'] }
       }
     ]
   }

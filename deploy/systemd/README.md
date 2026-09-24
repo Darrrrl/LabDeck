@@ -1,6 +1,6 @@
 # Host collector installation
 
-M2 adds an ordinary, unprivileged Linux collector. It reads selected `/proc` counters, `/proc/self/mountinfo`, statfs for explicitly configured mountpoints, and the host boot ID. It has no network listener, socket access, raw device access, Docker group, sudo path, or command channel from the web application.
+The base ordinary Linux collector reads selected `/proc` counters, `/proc/self/mountinfo`, statfs for explicitly configured mountpoints, and the host boot ID. It has no network listener, Docker group, sudo path, or command channel from the web application. M6 adds an opt-in Docker module; enabling that module grants the collector access to the Docker socket, which is effectively host-administrator power.
 
 Build on the Ubuntu host with Go 1.24 or later:
 
@@ -40,6 +40,26 @@ docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.h
 ```
 
 The override supplies only the supplemental reader GID and a read-only parent-directory mount, which preserves atomic rename visibility. It does not add a Docker group, device, host namespace, privileged mode, or write path.
+
+## Optional Docker observation
+
+Review the compromise impact first: Docker group membership gives the collector effective host-administrator power even though its code uses fixed GET requests. This is not a read-only socket permission. The web app container must **never** get the Docker group or socket.
+
+On the Ubuntu host, set `"docker": true` in the root-owned collector configuration. Install `labdeck-collector.docker.conf` as a systemd drop-in under `/etc/systemd/system/labdeck-collector.service.d/`, then run `systemctl daemon-reload` and restart the collector. Review the resulting `systemctl show labdeck-collector -p SupplementaryGroups` and the collector user's access to `/var/run/docker.sock`. Do not grant access automatically through the application. The collector allows only Engine version, all-container list, inspect-by-validated-ID and `stream=false` stats reads; no write endpoints, logs, exec, events stream, or arbitrary paths. Two requests run concurrently, each with a five-second deadline and 2 MiB body cap; the Docker cycle has a ten-second deadline.
+
+Optionally set `LABDECK_EXPECTED_RUNNING_CONTAINERS` to a comma-separated list of exact container names in the host Compose override. Only these stopped containers affect overall health; optional stopped containers remain informational. A recreated same-name container is a new ID. No per-container metric history is persisted in M6; current stats and restart/recreation observations are retained. If a stats read times out, the last sample keeps its original timestamp. Inspect configuration, environment, commands, mounts, labels and health logs are not exported.
+
+Use `LABDECK_LIVE_TEST=true LABDECK_HOST_SNAPSHOT_PATH=/var/lib/labdeck-collector/public/system/snapshot.json npm run test:live -- --provider=docker` only after reviewing the actual socket permissions and snapshot privacy. The live checker reads the sanitized snapshot, not the Docker socket.
+
+## Optional SMART observation
+
+Review [SMART hardware compatibility and validation](../../docs/integrations/smart-hardware.md) before enabling this timer. Install `smartmontools` from the host distribution. Add at most 16 explicitly reviewed entries to root-owned `/etc/labdeck/collector.json`, for example `{"id":"array-a","label":"Array disk A","path":"/dev/disk/by-id/ata-EXAMPLE","deviceType":"sat"}` under `smartDisks`. The path must be a stable `/dev/disk/by-id/` symlink resolving to a block device. `deviceType` is limited to `auto`, `ata`, `sat`, `scsi`, or `nvme`; a USB bridge or HBA may need a supported type determined by the operator. Never accept device paths from the browser.
+
+Create `/var/lib/labdeck-collector/public/smart` as `root:labdeck-readers` mode `0750`, within the already shared public parent, and install `labdeck-smart.service` and `labdeck-smart.timer` under `/etc/systemd/system/`. Review the unit before `systemctl daemon-reload` and `systemctl enable --now labdeck-smart.timer`. The root one-shot uses only fixed `smartctl -a -j -n standby,3 -d <reviewed type> <reviewed by-id path>` reads. It never enables SMART, starts self-tests, changes settings, or accepts a web request. Each disk has a 20-second limit and the service has a 130-second ceiling. The helper atomically writes a sanitized JSON snapshot in the separate SMART directory; it contains no raw smartctl output or full serial number. The ordinary collector remains unprivileged and does not inherit raw-device access.
+
+The app needs read access only to the sanitized public directory through the existing read-only Compose host mount. Add the SMART Compose override to set `LABDECK_SMART_SNAPSHOT_PATH`; the app does not need root, raw devices, or a helper control path. Back up the collector configuration as an operator secret because it exposes host device identity. Backing up the snapshot is unnecessary; it is regenerated by the timer. SQLite backup/restore remains as described in the deployment guide; retained SMART observations/events retain their original timestamps and are not made fresh by restore.
+
+On the actual Ubuntu host, inspect ownership and unit restrictions with `systemctl cat labdeck-smart.service` and `namei -l /var/lib/labdeck-collector/public/smart/snapshot.json`. Compare one fresh sanitized snapshot with the reviewed command on each allowlisted device. Run `LABDECK_LIVE_TEST=true LABDECK_SMART_SNAPSHOT_PATH=/var/lib/labdeck-collector/public/smart/snapshot.json npm run test:live -- --provider=smart`; the live checker reads only the snapshot. Exercise a sleeping disk and unsupported bridge if available. Do not call fixture tests hardware evidence.
 
 Validate values over the same interval with `free -b`, `df -B1`, `/proc/uptime`, `/proc/net/dev`, and `/proc/diskstats`. Memory definitions differ between tools: LabDeck uses `MemTotal - MemAvailable`. Filesystem used space is `total - free`, available is the unprivileged allocation amount, and reserved is `free - available`. Network and block-I/O rates are unknown for the first sample and after counter resets.
 

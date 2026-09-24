@@ -94,7 +94,7 @@ describe('host state persistence', () => {
     const second = structuredClone(first);
     second.sequence = 3;
     second.generatedAt = '2026-09-19T20:00:10Z';
-    for (const capability of Object.values(second.capabilities)) capability.observedAt = second.generatedAt;
+    for (const capability of Object.values(second.capabilities)) if (capability) capability.observedAt = second.generatedAt;
     state.ingest(second, base + 5_000);
     const bucket = database.prepare(`SELECT count, sum FROM metric_buckets b JOIN metric_series s ON s.series_id = b.series_id
       WHERE s.metric_name = 'cpu.utilization' AND b.resolution = '1m'`).get() as { count: number; sum: number };

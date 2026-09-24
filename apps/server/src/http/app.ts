@@ -14,6 +14,8 @@ import { databaseIsReady, openDatabase } from '../db/database.js';
 import { HostStateService, HostStateStore } from '../core/state.js';
 import { HostQueries } from '../core/queries.js';
 import { HostMonitor } from '../integrations/host/monitor.js';
+import { SmartMonitor } from '../integrations/host/smart-monitor.js';
+import { SmartStateStore } from '../integrations/host/smart-state.js';
 import { ReadOnlyTransport } from '../core/read-only-transport.js';
 import { JellyfinAdapter } from '../integrations/jellyfin/adapter.js';
 import { JellyfinMonitor } from '../integrations/jellyfin/monitor.js';
@@ -40,14 +42,17 @@ function requestHost(request: FastifyRequest): string {
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const database = openDatabase(config.databasePath);
   const hostState = new HostStateService(new HostStateStore(database));
+  const smartState = new SmartStateStore(database);
   const jellyfinState = new JellyfinStateStore(database);
   const arrStates = (config.arr ?? []).map((item) => ({ config: item, state: new ArrStateStore(database, item.kind) }));
   const prowlarrState = new ProwlarrStateStore(database);
-  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && jellyfinState.historyAvailable && arrStates.every(({ state }) => state.historyAvailable) && prowlarrState.historyAvailable, Date.now,
+  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && smartState.historyAvailable && jellyfinState.historyAvailable && arrStates.every(({ state }) => state.historyAvailable) && prowlarrState.historyAvailable, Date.now,
     config.jellyfin ? { id: config.jellyfin.id, name: config.jellyfin.name, browserUrl: config.jellyfin.browserUrl } : undefined,
     (config.arr ?? []).map(({ id, name, browserUrl }) => ({ id, name, browserUrl })),
-    config.prowlarr ? { id: 'prowlarr', name: 'Prowlarr', browserUrl: config.prowlarr.browserUrl } : undefined);
+    config.prowlarr ? { id: 'prowlarr', name: 'Prowlarr', browserUrl: config.prowlarr.browserUrl } : undefined,
+    config.expectedRunningContainers, config.smartSnapshotPath !== undefined);
   const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
+  const smartMonitor = config.smartSnapshotPath ? new SmartMonitor(config.smartSnapshotPath, smartState) : undefined;
   const jellyfinMonitor = config.jellyfin ? new JellyfinMonitor(new JellyfinAdapter(new ReadOnlyTransport(config.jellyfin.baseUrl, config.jellyfin.apiKey)), jellyfinState) : undefined;
   const arrMonitors = arrStates.map(({ config: item, state }) => new ArrMonitor(new ArrAdapter(item.kind, new ArrTransport(item.baseUrl, item.apiKey)), state));
   const prowlarrMonitor = config.prowlarr ? new ProwlarrMonitor(new ProwlarrAdapter(new ProwlarrTransport(config.prowlarr.baseUrl, config.prowlarr.apiKey)), prowlarrState) : undefined;
@@ -84,8 +89,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     }
     done();
   });
-  app.addHook('onReady', (done) => { hostMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); prowlarrMonitor?.start(); done(); });
-  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop()), prowlarrMonitor?.stop()]); database.close(); });
+  app.addHook('onReady', (done) => { hostMonitor?.start(); smartMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); prowlarrMonitor?.start(); done(); });
+  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), smartMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop()), prowlarrMonitor?.stop()]); database.close(); });
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
     app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');
@@ -172,6 +177,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     return hostQueries.media();
   });
   app.get('/api/v1/downloads', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.downloads(); });
+  app.get('/api/v1/containers', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.containers(); });
   app.get('/api/v1/settings', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return hostQueries.settings(config.demoMode);

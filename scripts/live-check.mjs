@@ -4,8 +4,8 @@ import { hostname, platform } from 'node:os';
 import { resolve } from 'node:path';
 
 const provider = process.argv.find((argument) => argument.startsWith('--provider='))?.slice('--provider='.length);
-if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr'].includes(provider)) {
-  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr|prowlarr');
+if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'docker', 'smart'].includes(provider)) {
+  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr|prowlarr|docker|smart');
   process.exitCode = 1;
 } else if (provider === 'jellyfin') {
   await checkJellyfin();
@@ -13,6 +13,10 @@ if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr'].includes(provider)) {
   await checkArr(provider);
 } else if (provider === 'prowlarr') {
   await checkProwlarr();
+} else if (provider === 'docker') {
+  checkDocker();
+} else if (provider === 'smart') {
+  checkSmart();
 } else if (process.env.LABDECK_LIVE_TEST !== 'true') {
   console.log('SKIP host live validation: set LABDECK_LIVE_TEST=true after reviewing the collector setup.');
 } else if (platform() !== 'linux') {
@@ -114,6 +118,41 @@ async function checkProwlarr() {
   const indexers = await get('/api/v1/indexer'); assert(Array.isArray(indexers) && indexers.every((item) => Number.isSafeInteger(item.id) && typeof item.name === 'string' && typeof item.enable === 'boolean'), 'Prowlarr indexer projection fields invalid');
   console.log(`PASS Prowlarr live validation: version ${status.version}; fixed v1 reads, header authentication, path prefix, health and indexer fields succeeded.`);
   console.log('NOTE indexer names, warnings, configuration fields, origins and credentials are intentionally omitted.');
+}
+function checkDocker() {
+  if (process.env.LABDECK_LIVE_TEST !== 'true') { console.log('SKIP Docker live validation: set LABDECK_LIVE_TEST=true after reviewing socket permissions and snapshot privacy.'); return; }
+  const configuredPath = process.env.LABDECK_HOST_SNAPSHOT_PATH; if (!configuredPath) throw new Error('LABDECK_HOST_SNAPSHOT_PATH is required');
+  const snapshotPath = resolve(configuredPath); const stat = lstatSync(snapshotPath); assert(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 2 * 1024 * 1024, 'Docker snapshot must be a bounded regular non-symlink file');
+  const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')); const docker = snapshot.capabilities?.docker;
+  assert(snapshot.schemaVersion === '1' && docker?.status === 'ok', 'Docker observation unavailable');
+  assert(Math.abs(Date.now() - Date.parse(docker.observedAt)) <= 60_000, 'Docker observation stale or future-dated');
+  assert(Array.isArray(docker.data?.containers) && docker.data.containers.length <= 100, 'Docker inventory invalid');
+  for (const item of docker.data.containers) {
+    assert(/^[a-f0-9]{64}$/.test(item.id) && typeof item.name === 'string' && typeof item.state === 'string', 'Docker container projection invalid');
+    assert(!['Config', 'Env', 'Mounts', 'Labels', 'Command', 'Log'].some((field) => field in item), 'Docker raw inspect field escaped projection');
+  }
+  console.log(`PASS Docker live snapshot validation: API ${docker.data.apiVersion}, ${docker.data.containers.length} projected containers; no Docker socket read by the live checker.`);
+  console.log('NOTE installed Engine API, stats semantics and 50-container behavior still require operator comparison against the Docker host.');
+}
+function checkSmart() {
+  if (process.env.LABDECK_LIVE_TEST !== 'true') { console.log('SKIP SMART live validation: set LABDECK_LIVE_TEST=true after reviewing device, timer and snapshot permissions.'); return; }
+  if (platform() !== 'linux') { console.log('SKIP SMART live validation: an Ubuntu/Linux host is required.'); return; }
+  const configuredPath = process.env.LABDECK_SMART_SNAPSHOT_PATH; if (!configuredPath) throw new Error('LABDECK_SMART_SNAPSHOT_PATH is required');
+  const snapshotPath = resolve(configuredPath); const stat = lstatSync(snapshotPath);
+  assert(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 2 * 1024 * 1024, 'SMART snapshot must be a bounded regular non-symlink file');
+  const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+  assert(snapshot.schemaVersion === '1' && Array.isArray(snapshot.disks) && snapshot.disks.length > 0 && snapshot.disks.length <= 16, 'SMART snapshot schema or inventory invalid');
+  assert(Number.isFinite(Date.parse(snapshot.generatedAt)) && Math.abs(Date.now() - Date.parse(snapshot.generatedAt)) <= 30 * 60_000, 'SMART snapshot stale or future-dated');
+  for (const disk of snapshot.disks) {
+    assert(typeof disk.id === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(disk.id), 'SMART disk ID invalid');
+    assert(['ok', 'asleep', 'unsupported', 'permission-denied', 'timeout', 'read-failed'].includes(disk.state), 'SMART disk state invalid');
+    assert(['passed', 'warning', 'failed', 'unknown'].includes(disk.health), 'SMART disk health invalid');
+    assert(['ATA', 'NVME', 'SCSI', 'unknown'].includes(disk.protocol), 'SMART protocol invalid');
+    assert(Number.isFinite(Date.parse(disk.observedAt)), 'SMART observation time invalid');
+    assert(!['serial_number', 'smartctl', 'ata_smart_attributes', 'nvme_smart_health_information_log', 'scsi_error_counter_log'].some((key) => key in disk), 'raw SMART data escaped projection');
+  }
+  console.log(`PASS SMART live snapshot validation: ${snapshot.disks.length} projected disks; no raw device read by the live checker.`);
+  console.log('NOTE physical device, smartctl version, exit bits, standby behavior and permissions still require operator comparison on Ubuntu.');
 }
 function kindLabel(baseUrl) { return baseUrl.hostname || 'Arr'; }
 

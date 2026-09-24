@@ -21,6 +21,17 @@ const filesystemDataSchema = z.object({
   id: z.string(), path: z.string(), source: z.string(), fsType: z.string(), totalBytes: z.number(), usedBytes: z.number(),
   availableBytes: z.number(), reservedBytes: z.number(), usedRatio: z.number()
 });
+const smartCounterSchema = z.string().regex(/^\d*$/);
+const smartDiskSchema = z.object({
+  id: z.string(), label: z.string(), state: z.enum(['ok', 'asleep', 'unsupported', 'permission-denied', 'timeout', 'read-failed']),
+  observedAt: timestampSchema, evidenceAt: timestampSchema.nullable(), temperatureWarning: z.boolean(), identity: z.string(), serialSuffix: z.string(),
+  protocol: z.enum(['ATA', 'NVME', 'SCSI', 'unknown']), model: z.string(), capacityBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
+  temperatureCelsius: z.number().nullable(), health: z.enum(['passed', 'warning', 'failed', 'unknown']), powerOnHours: z.number().int().nonnegative().nullable(),
+  ata: z.object({ reallocated: smartCounterSchema, pending: smartCounterSchema, uncorrectable: smartCounterSchema }).nullable(),
+  nvme: z.object({ criticalWarning: z.number().int().nonnegative().nullable(), availableSparePercent: z.number().int().nonnegative().nullable(), percentageUsed: z.number().int().nonnegative().nullable(), mediaErrors: smartCounterSchema, errorLogEntries: smartCounterSchema }).nullable(),
+  scsi: z.object({ grownDefects: smartCounterSchema, readUncorrected: smartCounterSchema }).nullable()
+});
+const smartSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(), failed: z.number().int().nonnegative(), warning: z.number().int().nonnegative(), unavailable: z.number().int().nonnegative() });
 const networkDataSchema = z.object({ id: z.string(), name: z.string(), receiveBytesPerSecond: z.number().nullable(), transmitBytesPerSecond: z.number().nullable() });
 const blockIoDataSchema = z.object({ id: z.string(), name: z.string(), readBytesPerSecond: z.number().nullable(), writeBytesPerSecond: z.number().nullable() });
 export const mediaSessionSchema = z.object({
@@ -37,6 +48,19 @@ const mediaSummarySchema = z.object({
   sessions: z.array(mediaSessionSchema).max(100)
 });
 const connectionSchema = z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']);
+const dockerContainerSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{64}$/), name: z.string().max(128), image: z.string().max(160),
+  createdAt: timestampSchema.nullable(), startedAt: timestampSchema.nullable(),
+  state: z.enum(['created', 'running', 'paused', 'restarting', 'exited', 'dead', 'unknown']),
+  health: z.enum(['healthy', 'unhealthy', 'starting', 'no-healthcheck', 'unknown']), restartCount: z.number().int().nonnegative().nullable(),
+  cpuPercent: z.number().nonnegative().nullable(), memoryBytes: z.number().int().nonnegative().nullable(),
+  memoryLimitBytes: z.number().int().nonnegative().nullable(), memoryKind: z.enum(['working-set', 'raw', 'unknown']), statsObservedAt: timestampSchema.nullable()
+});
+const containerSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
+  inventoryComplete: z.boolean().nullable(), total: z.number().int().nonnegative().nullable(), running: z.number().int().nonnegative().nullable(),
+  unhealthy: z.number().int().nonnegative().nullable(), expectedStopped: z.number().int().nonnegative().nullable() });
+export const containersResponseSchema = containerSummarySchema.extend({ containers: z.array(dockerContainerSchema.extend({ expectedRunning: z.boolean() })).max(100) });
+export type ContainersResponse = z.infer<typeof containersResponseSchema>;
 const downloadQueueEntrySchema = z.object({ source: z.enum(['sonarr', 'radarr']), id: z.string(), title: z.string(), sizeBytes: z.number().nonnegative().nullable(), remainingBytes: z.number().nonnegative().nullable(), progressRatio: z.number().min(0).max(1).nullable(), eta: timestampSchema.nullable(), stage: z.enum(['downloading', 'import-pending', 'warning', 'unknown']), warnings: z.array(z.string()).max(5) });
 const upcomingSchema = z.object({ id: z.string(), title: z.string(), date: timestampSchema.nullable(), releaseKind: z.enum(['episode-air', 'digital', 'physical', 'theatrical', 'unknown']) });
 const importSchema = z.object({ id: z.string(), title: z.string(), importedAt: timestampSchema.nullable() });
@@ -62,7 +86,7 @@ export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
     host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(),
-    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable(), events: z.array(eventSchema).max(10) })
+    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable(), containers: containerSummarySchema.nullable(), disks: smartSummarySchema.nullable(), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -87,7 +111,7 @@ export const systemResponseSchema = z.object({
 });
 export type SystemResponse = z.infer<typeof systemResponseSchema>;
 
-export const storageResponseSchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), filesystems: z.array(filesystemDataSchema), history: z.record(z.string(), z.array(metricPointSchema)) });
+export const storageResponseSchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), filesystems: z.array(filesystemDataSchema), history: z.record(z.string(), z.array(metricPointSchema)), smart: smartSummarySchema.extend({ disks: z.array(smartDiskSchema).max(16) }) });
 export type StorageResponse = z.infer<typeof storageResponseSchema>;
 
 export const eventsResponseSchema = z.object({ events: z.array(eventSchema).max(100), nextCursor: z.number().int().nullable() });
@@ -132,8 +156,16 @@ export const hostCollectorSnapshotSchema = z.object({
       usedRatio: z.number().min(0).max(1)
     })).max(64)),
     interfaces: capabilitySchema(z.array(z.object({ id: z.string(), name: z.string(), receiveBytesPerSecond: rateSchema, transmitBytesPerSecond: rateSchema })).max(64)),
-    blockIo: capabilitySchema(z.array(z.object({ id: z.string(), name: z.string(), readBytesPerSecond: rateSchema, writeBytesPerSecond: rateSchema })).max(64))
+    blockIo: capabilitySchema(z.array(z.object({ id: z.string(), name: z.string(), readBytesPerSecond: rateSchema, writeBytesPerSecond: rateSchema })).max(64)),
+    docker: z.discriminatedUnion('status', [
+      z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.enum(['complete', 'partial']), data: z.object({ apiVersion: z.string().regex(/^1\.\d{2}$/), inventoryComplete: z.boolean(), containers: z.array(dockerContainerSchema).max(100) }) }),
+      z.object({ status: z.literal('error'), observedAt: timestampSchema, completeness: z.literal('complete'), errorCode: z.enum(['read-failed']) })
+    ]).optional()
   })
 }).strict();
 
 export type HostCollectorSnapshot = z.infer<typeof hostCollectorSnapshotSchema>;
+
+export const smartSnapshotSchema = z.object({ schemaVersion: z.literal('1'), generatedAt: timestampSchema,
+  disks: z.array(smartDiskSchema.omit({ evidenceAt: true, temperatureWarning: true })).max(16) }).strict();
+export type SmartSnapshot = z.infer<typeof smartSnapshotSchema>;

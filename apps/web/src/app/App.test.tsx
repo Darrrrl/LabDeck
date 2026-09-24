@@ -29,7 +29,7 @@ describe('LabDeck shell', () => {
     });
     renderApp(mockFetch);
     expect(await screen.findByRole('heading', { name: 'No integrations configured' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('OverviewSystemStorageMediaDownloadsEventsSettings');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('OverviewSystemStorageMediaDownloadsContainersEventsSettings');
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
     await waitFor(() => expect(window.location.pathname).toBe('/settings'));
   });

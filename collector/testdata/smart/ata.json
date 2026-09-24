@@ -1,0 +1,9 @@
+{
+  "smartctl": {"exit_status": 0}, "device": {"protocol": "ATA"},
+  "model_name": "Example ATA", "serial_number": "SYNTHETIC-ATA-1234",
+  "user_capacity": {"bytes": 1000000000000}, "temperature": {"current": 41},
+  "power_on_time": {"hours": 1000}, "smart_status": {"passed": true},
+  "ata_smart_attributes": {"table": [
+    {"id": 5, "raw": {"value": 2}}, {"id": 197, "raw": {"value": 1}}, {"id": 198, "raw": {"value": 0}}
+  ]}, "untrusted_config": {"password": "SMART_SECRET_CANARY"}
+}

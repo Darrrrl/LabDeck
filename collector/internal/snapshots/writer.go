@@ -10,6 +10,14 @@ import (
 const Filename = "snapshot.json"
 
 func WriteAtomic(directory string, snapshot Snapshot) error {
+	return writeAtomic(directory, snapshot)
+}
+
+func WriteSmartAtomic(directory string, snapshot SmartSnapshot) error {
+	return writeAtomic(directory, snapshot)
+}
+
+func writeAtomic(directory string, snapshot any) error {
 	if info, err := os.Lstat(directory); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("snapshot directory must not be a symlink")
 	}

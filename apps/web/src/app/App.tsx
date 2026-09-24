@@ -7,6 +7,7 @@ import { StoragePage } from '../features/storage/StoragePage.js';
 import { EventsPage } from '../features/events/EventsPage.js';
 import { MediaPage } from '../features/media/MediaPage.js';
 import { DownloadsPage } from '../features/downloads/DownloadsPage.js';
+import { ContainersPage } from '../features/containers/ContainersPage.js';
 import { deleteSession, getSession } from './api.js';
 import { Login } from './Login.js';
 import { Shell } from './Shell.js';
@@ -26,6 +27,7 @@ export function App() {
         <Route path="storage" element={<StoragePage />} />
         <Route path="media" element={<MediaPage />} />
         <Route path="downloads" element={<DownloadsPage />} />
+        <Route path="containers" element={<ContainersPage />} />
         <Route path="events" element={<EventsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<OverviewPage />} />

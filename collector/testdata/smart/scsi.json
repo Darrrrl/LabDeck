@@ -1,0 +1,7 @@
+{
+  "smartctl": {"exit_status": 0}, "device": {"protocol": "SCSI"},
+  "product": "Example SAS", "serial_number": "SYNTHETIC-SCSI-9012",
+  "user_capacity": {"bytes": 4000000000000}, "smart_status": {"passed": true},
+  "scsi_grown_defect_list": 3,
+  "scsi_error_counter_log": {"read": {"total_uncorrected_errors": 0}}
+}

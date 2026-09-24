@@ -1,0 +1,4 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_SMART_SNAPSHOT_PATH: /run/labdeck-host/smart/snapshot.json

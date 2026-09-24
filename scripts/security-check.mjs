@@ -8,7 +8,7 @@ async function files(path) {
 }
 
 const forbidden = ['LABDECK_SECRET_CANARY_7dcf3d', 'X-Api-Key', '/var/run/docker.sock'];
-const targets = [...await files(resolve('apps/web/dist')), resolve('deploy/compose/compose.example.yml'), resolve('deploy/compose/compose.host.yml'), resolve('deploy/compose/compose.jellyfin.yml'), resolve('deploy/compose/compose.sonarr.yml'), resolve('deploy/compose/compose.radarr.yml'), resolve('deploy/compose/compose.prowlarr.yml')];
+const targets = [...await files(resolve('apps/web/dist')), resolve('deploy/compose/compose.example.yml'), resolve('deploy/compose/compose.host.yml'), resolve('deploy/compose/compose.smart.yml'), resolve('deploy/compose/compose.jellyfin.yml'), resolve('deploy/compose/compose.sonarr.yml'), resolve('deploy/compose/compose.radarr.yml'), resolve('deploy/compose/compose.prowlarr.yml')];
 const violations = [];
 for (const target of targets) {
   const content = await readFile(target, 'utf8');
@@ -16,13 +16,15 @@ for (const target of targets) {
 }
 const compose = await readFile(resolve('deploy/compose/compose.example.yml'), 'utf8');
 const hostCompose = await readFile(resolve('deploy/compose/compose.host.yml'), 'utf8');
+const smartCompose = await readFile(resolve('deploy/compose/compose.smart.yml'), 'utf8');
 const jellyfinCompose = await readFile(resolve('deploy/compose/compose.jellyfin.yml'), 'utf8');
 for (const required of ['127.0.0.1:${LABDECK_PORT:-7337}:7337', 'read_only: true', 'cap_drop:', 'no-new-privileges:true']) {
   if (!compose.includes(required)) violations.push(`compose: missing ${required}`);
 }
 for (const forbiddenCompose of ['privileged: true', '/var/run/docker.sock', '/dev/']) {
-  if (`${compose}\n${hostCompose}`.includes(forbiddenCompose)) violations.push(`compose: forbidden ${forbiddenCompose}`);
+  if (`${compose}\n${hostCompose}\n${smartCompose}`.includes(forbiddenCompose)) violations.push(`compose: forbidden ${forbiddenCompose}`);
 }
+if (!smartCompose.includes('LABDECK_SMART_SNAPSHOT_PATH: /run/labdeck-host/smart/snapshot.json')) violations.push('smart compose: missing sanitized snapshot path');
 for (const required of ['LABDECK_HOST_SNAPSHOT_PATH: /run/labdeck-host/system/snapshot.json', 'target: /run/labdeck-host', 'read_only: true']) {
   if (!hostCompose.includes(required)) violations.push(`host compose: missing ${required}`);
 }

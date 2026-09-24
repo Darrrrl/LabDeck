@@ -11,6 +11,8 @@ const environmentSchema = z.object({
   LABDECK_DATABASE_PATH: z.string().min(1).default('./data/labdeck.db'),
   LABDECK_WEB_ROOT: z.string().min(1).default('./apps/web/dist'),
   LABDECK_HOST_SNAPSHOT_PATH: z.string().min(1).optional(),
+  LABDECK_SMART_SNAPSHOT_PATH: z.string().min(1).optional(),
+  LABDECK_EXPECTED_RUNNING_CONTAINERS: z.string().optional(),
   LABDECK_JELLYFIN_BASE_URL: z.url().optional(),
   LABDECK_JELLYFIN_BROWSER_URL: z.url().optional(),
   LABDECK_JELLYFIN_API_KEY_FILE: z.string().min(1).optional(),
@@ -46,6 +48,8 @@ export interface AppConfig {
   databasePath: string;
   webRoot: string;
   hostSnapshotPath?: string;
+  smartSnapshotPath?: string;
+  expectedRunningContainers?: ReadonlySet<string>;
   jellyfin?: JellyfinConfig;
   arr?: ArrConfig[];
   prowlarr?: ProwlarrConfig;
@@ -100,6 +104,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
   } : undefined;
 
   const configuredHosts = parsed.LABDECK_ALLOWED_HOSTS?.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+  const expectedNames = parsed.LABDECK_EXPECTED_RUNNING_CONTAINERS?.split(',').map((name) => name.trim()).filter(Boolean) ?? [];
+  if (expectedNames.length > 100 || expectedNames.some((name) => !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name))) throw new Error('Expected-running container names must be safe and bounded');
   const allowedHosts = new Set(configuredHosts?.length ? configuredHosts : [origin.host.toLowerCase()]);
   return {
     host: parsed.LABDECK_HOST,
@@ -108,6 +114,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     databasePath: parsed.LABDECK_DATABASE_PATH,
     webRoot: resolve(parsed.LABDECK_WEB_ROOT),
     ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
+    ...(parsed.LABDECK_SMART_SNAPSHOT_PATH ? { smartSnapshotPath: resolve(parsed.LABDECK_SMART_SNAPSHOT_PATH) } : {}),
+    expectedRunningContainers: new Set(expectedNames),
     ...(jellyfin ? { jellyfin } : {}),
     arr,
     ...(prowlarr ? { prowlarr } : {}),

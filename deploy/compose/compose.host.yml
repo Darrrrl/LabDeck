@@ -2,6 +2,7 @@ services:
   labdeck:
     environment:
       LABDECK_HOST_SNAPSHOT_PATH: /run/labdeck-host/system/snapshot.json
+      LABDECK_EXPECTED_RUNNING_CONTAINERS: ${LABDECK_EXPECTED_RUNNING_CONTAINERS:-}
     group_add:
       - ${LABDECK_READERS_GID:?set the numeric labdeck-readers GID}
     volumes:

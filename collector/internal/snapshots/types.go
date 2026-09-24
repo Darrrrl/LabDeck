@@ -20,6 +20,7 @@ type Capabilities struct {
 	Filesystems Capability[[]Filesystem]       `json:"filesystems"`
 	Interfaces  Capability[[]NetworkInterface] `json:"interfaces"`
 	BlockIO     Capability[[]BlockDeviceIO]    `json:"blockIo"`
+	Docker      *Capability[DockerInventory]   `json:"docker,omitempty"`
 }
 
 type Capability[T any] struct {
@@ -93,4 +94,24 @@ type BlockDeviceIO struct {
 	Name                string   `json:"name"`
 	ReadBytesPerSecond  *float64 `json:"readBytesPerSecond"`
 	WriteBytesPerSecond *float64 `json:"writeBytesPerSecond"`
+}
+type DockerInventory struct {
+	APIVersion        string            `json:"apiVersion"`
+	InventoryComplete bool              `json:"inventoryComplete"`
+	Containers        []DockerContainer `json:"containers"`
+}
+type DockerContainer struct {
+	ID               string     `json:"id"`
+	Name             string     `json:"name"`
+	Image            string     `json:"image"`
+	CreatedAt        *time.Time `json:"createdAt"`
+	StartedAt        *time.Time `json:"startedAt"`
+	State            string     `json:"state"`
+	Health           string     `json:"health"`
+	RestartCount     *uint64    `json:"restartCount"`
+	CPUPercent       *float64   `json:"cpuPercent"`
+	MemoryBytes      *uint64    `json:"memoryBytes"`
+	MemoryLimitBytes *uint64    `json:"memoryLimitBytes"`
+	MemoryKind       string     `json:"memoryKind"`
+	StatsObservedAt  *time.Time `json:"statsObservedAt"`
 }
