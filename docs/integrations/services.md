@@ -38,6 +38,8 @@ Only fetch indexer/application configuration if safe names/IDs cannot be obtaine
 
 Primary v1 card: reported warnings and failing indexers with reason/last evidence. Optional stats remain outside the first v1 gate if schemas or denominators are unclear. Verify disabled-vs-failing behavior, retry windows, application-specific warnings, and statistics units/date range before enabling.
 
+M5 fixture implementation uses the published API v1 schema's `IndexerStatusResource.disabledTill` and `mostRecentFailure` plus `IndexerResource.enable`. An enabled indexer is marked failing only while `disabledTill` is in the future. Past failure timestamps alone do not establish a current failure; an absent status row is shown as “no active failure reported,” not proven healthy. Configuration is fetched solely to project ID/name/enable, and nested `fields` are discarded immediately. Health messages and sources are not projected because they may include secret-bearing configuration or URLs; only generic severity text is retained. Application connectivity remains `unknown`; application configuration and active tests are not read. This mapping is fixture-tested and remains subject to installed-version verification.
+
 ## Compatibility record required per adapter
 
 Create `tests/fixtures/<provider>/<version>/README.md` when implementing, containing exact app version, API/schema version or source commit, fixture collection date, verified read paths, auth header name (never value), supported capabilities and redaction procedure. Hand-authored fixtures must say synthetic. Minimum cases: healthy, empty, partial, unauthorized, unreachable, slow, malformed, oversized and changed optional fields.

@@ -65,3 +65,16 @@ docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.r
 ```
 
 These adapters issue only fixed API v3 `GET` requests. They never invoke command, search, grab, delete, refresh, or test endpoints.
+
+## Prowlarr monitoring
+
+Store the Prowlarr API key in a restricted host file readable by container UID/GID `10001:10001`, mode `0440`. Internal API and browser URLs are separate and may include a path prefix.
+
+```sh
+LABDECK_PROWLARR_BASE_URL=http://prowlarr:9696/prowlarr \
+LABDECK_PROWLARR_BROWSER_URL=https://prowlarr.example-tailnet.ts.net/prowlarr \
+LABDECK_PROWLARR_API_KEY_FILE=/secure/path/prowlarr-api-key \
+docker compose -f deploy/compose/compose.example.yml -f deploy/compose/compose.prowlarr.yml config --quiet
+```
+
+The adapter uses fixed API v1 `GET` reads of system status, health, indexer status and indexer configuration. It projects configuration immediately to ID, name and enable state; nested provider fields never enter SQLite or browser responses. It makes no active indexer/application test calls. Application connectivity remains unknown without separate evidence.

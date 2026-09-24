@@ -16,6 +16,7 @@ const environmentSchema = z.object({
   LABDECK_JELLYFIN_API_KEY_FILE: z.string().min(1).optional(),
   LABDECK_SONARR_BASE_URL: z.url().optional(), LABDECK_SONARR_BROWSER_URL: z.url().optional(), LABDECK_SONARR_API_KEY_FILE: z.string().min(1).optional(),
   LABDECK_RADARR_BASE_URL: z.url().optional(), LABDECK_RADARR_BROWSER_URL: z.url().optional(), LABDECK_RADARR_API_KEY_FILE: z.string().min(1).optional(),
+  LABDECK_PROWLARR_BASE_URL: z.url().optional(), LABDECK_PROWLARR_BROWSER_URL: z.url().optional(), LABDECK_PROWLARR_API_KEY_FILE: z.string().min(1).optional(),
   LABDECK_CANONICAL_ORIGIN: z.url().default('https://labdeck.localhost'),
   LABDECK_ALLOWED_HOSTS: z.string().optional(),
   LABDECK_OWNER_PASSWORD_HASH_FILE: z.string().min(1).optional(),
@@ -30,10 +31,13 @@ const environmentSchema = z.object({
   for (const [name, fields] of [['Sonarr', [value.LABDECK_SONARR_BASE_URL, value.LABDECK_SONARR_BROWSER_URL, value.LABDECK_SONARR_API_KEY_FILE]], ['Radarr', [value.LABDECK_RADARR_BASE_URL, value.LABDECK_RADARR_BROWSER_URL, value.LABDECK_RADARR_API_KEY_FILE]]] as const) {
     if (fields.some(Boolean) && !fields.every(Boolean)) context.addIssue({ code: 'custom', message: `${name} base URL, browser URL, and API key file must be configured together` });
   }
+  const prowlarr = [value.LABDECK_PROWLARR_BASE_URL, value.LABDECK_PROWLARR_BROWSER_URL, value.LABDECK_PROWLARR_API_KEY_FILE];
+  if (prowlarr.some(Boolean) && !prowlarr.every(Boolean)) context.addIssue({ code: 'custom', message: 'Prowlarr base URL, browser URL, and API key file must be configured together' });
 });
 
 export interface JellyfinConfig { id: 'jellyfin'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
 export interface ArrConfig { id: 'sonarr' | 'radarr'; kind: 'sonarr' | 'radarr'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
+export interface ProwlarrConfig { id: 'prowlarr'; name: string; baseUrl: string; browserUrl: string; apiKey: string; }
 
 export interface AppConfig {
   host: string;
@@ -44,6 +48,7 @@ export interface AppConfig {
   hostSnapshotPath?: string;
   jellyfin?: JellyfinConfig;
   arr?: ArrConfig[];
+  prowlarr?: ProwlarrConfig;
   canonicalOrigin: string;
   allowedHosts: ReadonlySet<string>;
   passwordHash?: string;
@@ -89,6 +94,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     { id: 'radarr' as const, name: 'Radarr', base: parsed.LABDECK_RADARR_BASE_URL, browser: parsed.LABDECK_RADARR_BROWSER_URL, key: parsed.LABDECK_RADARR_API_KEY_FILE }
   ];
   for (const input of arrInputs) if (input.base && input.browser && input.key) arr.push({ id: input.id, kind: input.id, name: input.name, baseUrl: serviceUrl(input.base, `${input.name} base URL`, true), browserUrl: serviceUrl(input.browser, `${input.name} browser URL`, true), apiKey: secretFile(input.key, `${input.name} API key`) });
+  const prowlarr = parsed.LABDECK_PROWLARR_BASE_URL && parsed.LABDECK_PROWLARR_BROWSER_URL && parsed.LABDECK_PROWLARR_API_KEY_FILE ? {
+    id: 'prowlarr' as const, name: 'Prowlarr', baseUrl: serviceUrl(parsed.LABDECK_PROWLARR_BASE_URL, 'Prowlarr base URL', true),
+    browserUrl: serviceUrl(parsed.LABDECK_PROWLARR_BROWSER_URL, 'Prowlarr browser URL', true), apiKey: secretFile(parsed.LABDECK_PROWLARR_API_KEY_FILE, 'Prowlarr API key')
+  } : undefined;
 
   const configuredHosts = parsed.LABDECK_ALLOWED_HOSTS?.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
   const allowedHosts = new Set(configuredHosts?.length ? configuredHosts : [origin.host.toLowerCase()]);
@@ -101,6 +110,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
     ...(jellyfin ? { jellyfin } : {}),
     arr,
+    ...(prowlarr ? { prowlarr } : {}),
     canonicalOrigin: origin.origin,
     allowedHosts,
     ...(passwordHash ? { passwordHash } : {}),

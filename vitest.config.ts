@@ -36,6 +36,10 @@ export default defineConfig({
       {
         extends: true,
         test: { name: 'arr', include: ['apps/**/*.arr.integration.test.ts'] }
+      },
+      {
+        extends: true,
+        test: { name: 'prowlarr', include: ['apps/**/*.prowlarr.integration.test.ts'] }
       }
     ]
   }

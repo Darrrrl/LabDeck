@@ -1,0 +1,11 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_PROWLARR_BASE_URL: ${LABDECK_PROWLARR_BASE_URL:?set the internal Prowlarr API base URL}
+      LABDECK_PROWLARR_BROWSER_URL: ${LABDECK_PROWLARR_BROWSER_URL:?set the browser Prowlarr URL}
+      LABDECK_PROWLARR_API_KEY_FILE: /run/secrets/prowlarr_api_key
+    volumes:
+      - type: bind
+        source: ${LABDECK_PROWLARR_API_KEY_FILE:?set the host Prowlarr API key file}
+        target: /run/secrets/prowlarr_api_key
+        read_only: true

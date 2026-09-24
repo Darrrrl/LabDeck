@@ -4,13 +4,15 @@ import { hostname, platform } from 'node:os';
 import { resolve } from 'node:path';
 
 const provider = process.argv.find((argument) => argument.startsWith('--provider='))?.slice('--provider='.length);
-if (!['host', 'jellyfin', 'sonarr', 'radarr'].includes(provider)) {
-  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr');
+if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr'].includes(provider)) {
+  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr|prowlarr');
   process.exitCode = 1;
 } else if (provider === 'jellyfin') {
   await checkJellyfin();
 } else if (provider === 'sonarr' || provider === 'radarr') {
   await checkArr(provider);
+} else if (provider === 'prowlarr') {
+  await checkProwlarr();
 } else if (process.env.LABDECK_LIVE_TEST !== 'true') {
   console.log('SKIP host live validation: set LABDECK_LIVE_TEST=true after reviewing the collector setup.');
 } else if (platform() !== 'linux') {
@@ -98,6 +100,21 @@ async function checkArr(kind) {
   console.log(`PASS ${kind} live validation: version ${status.version}; fixed v3 reads, header authentication, path prefix, queue, health, catalog, missing, calendar and history succeeded.`); console.log('NOTE titles, warnings, origins and credentials are intentionally omitted.');
 }
 async function arrGet(path, query, baseUrl, key) { const url = new URL(`${baseUrl.toString().replace(/\/$/, '')}/${path.slice(1)}`); for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value); const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 5_000); try { const response = await fetch(url, { method: 'GET', redirect: 'error', signal: controller.signal, headers: { Accept: 'application/json', 'X-Api-Key': key } }); assert(response.ok, response.status === 401 || response.status === 403 ? `${kindLabel(baseUrl)} credentials rejected` : `Arr read failed with status ${response.status}`); const body = await response.text(); assert(Buffer.byteLength(body) <= 2 * 1024 * 1024, 'Arr body exceeds 2MiB'); return JSON.parse(body); } finally { clearTimeout(timer); } }
+async function checkProwlarr() {
+  if (process.env.LABDECK_LIVE_TEST !== 'true') { console.log('SKIP Prowlarr live validation: set LABDECK_LIVE_TEST=true after reviewing read paths and privacy content.'); return; }
+  const base = process.env.LABDECK_PROWLARR_BASE_URL; const keyFile = process.env.LABDECK_PROWLARR_API_KEY_FILE;
+  if (!base || !keyFile) throw new Error('LABDECK_PROWLARR_BASE_URL and LABDECK_PROWLARR_API_KEY_FILE are required');
+  const baseUrl = new URL(base); assert(['http:', 'https:'].includes(baseUrl.protocol) && !baseUrl.username && !baseUrl.password && !baseUrl.search && !baseUrl.hash, 'invalid Prowlarr base URL');
+  const keyPath = resolve(keyFile); const keyStat = lstatSync(keyPath); assert(keyStat.isFile() && !keyStat.isSymbolicLink() && (keyStat.mode & 0o007) === 0, 'Prowlarr key must be a restricted regular non-symlink file');
+  const key = readFileSync(keyPath, 'utf8').trim(); assert(key && key.length <= 512 && !/[\r\n]/.test(key), 'invalid Prowlarr API key');
+  const get = (path) => arrGet(path, {}, baseUrl, key);
+  const status = await get('/api/v1/system/status'); assert(typeof status?.version === 'string', 'Prowlarr version missing');
+  assert(Array.isArray(await get('/api/v1/health')), 'Prowlarr health invalid');
+  assert(Array.isArray(await get('/api/v1/indexerstatus')), 'Prowlarr indexer status invalid');
+  const indexers = await get('/api/v1/indexer'); assert(Array.isArray(indexers) && indexers.every((item) => Number.isSafeInteger(item.id) && typeof item.name === 'string' && typeof item.enable === 'boolean'), 'Prowlarr indexer projection fields invalid');
+  console.log(`PASS Prowlarr live validation: version ${status.version}; fixed v1 reads, header authentication, path prefix, health and indexer fields succeeded.`);
+  console.log('NOTE indexer names, warnings, configuration fields, origins and credentials are intentionally omitted.');
+}
 function kindLabel(baseUrl) { return baseUrl.hostname || 'Arr'; }
 
 function assert(condition, message) { if (!condition) throw new Error(message); }

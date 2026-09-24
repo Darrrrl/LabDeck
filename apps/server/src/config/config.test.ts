@@ -46,4 +46,11 @@ describe('loadConfig', () => {
     const config = loadConfig({ LABDECK_SONARR_BASE_URL: 'http://sonarr.test/base', LABDECK_SONARR_BROWSER_URL: 'https://sonarr.test/ui', LABDECK_SONARR_API_KEY_FILE: sonarrKey, LABDECK_RADARR_BASE_URL: 'http://radarr.test/base', LABDECK_RADARR_BROWSER_URL: 'https://radarr.test/ui', LABDECK_RADARR_API_KEY_FILE: radarrKey });
     expect(config.arr).toEqual([{ id: 'sonarr', kind: 'sonarr', name: 'Sonarr', baseUrl: 'http://sonarr.test/base', browserUrl: 'https://sonarr.test/ui', apiKey: 'sonarr-secret' }, { id: 'radarr', kind: 'radarr', name: 'Radarr', baseUrl: 'http://radarr.test/base', browserUrl: 'https://radarr.test/ui', apiKey: 'radarr-secret' }]);
   });
+
+  it('requires complete Prowlarr settings and reads only a restricted key file', () => {
+    expect(() => loadConfig({ LABDECK_PROWLARR_BASE_URL: 'http://prowlarr.test' })).toThrow(/configured together/);
+    const directory = mkdtempSync(join(tmpdir(), 'labdeck-prowlarr-config-')); const keyPath = join(directory, 'key'); writeFileSync(keyPath, 'prowlarr-secret', { mode: 0o600 });
+    const config = loadConfig({ LABDECK_PROWLARR_BASE_URL: 'http://prowlarr.test/prefix/', LABDECK_PROWLARR_BROWSER_URL: 'https://prowlarr.example.test/ui/', LABDECK_PROWLARR_API_KEY_FILE: keyPath });
+    expect(config.prowlarr).toMatchObject({ baseUrl: 'http://prowlarr.test/prefix', browserUrl: 'https://prowlarr.example.test/ui', apiKey: 'prowlarr-secret' });
+  });
 });

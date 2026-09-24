@@ -1,0 +1,15 @@
+{
+  "status": { "version": "synthetic-1.0" },
+  "health": [{ "type": "warning", "message": "LABDECK_SECRET_CANARY_7dcf3d" }],
+  "indexerstatus": [
+    { "indexerId": 1, "disabledTill": "2026-09-25T00:00:00Z", "mostRecentFailure": "2026-09-24T00:00:00Z" },
+    { "indexerId": 2, "disabledTill": "2026-09-25T00:00:00Z", "mostRecentFailure": "2026-09-24T00:00:00Z" },
+    { "indexerId": 3, "disabledTill": "2026-09-22T00:00:00Z", "mostRecentFailure": "2026-09-21T00:00:00Z" }
+  ],
+  "indexer": [
+    { "id": 1, "name": "Example One", "enable": true, "fields": [{ "name": "apiKey", "value": "LABDECK_SECRET_CANARY_7dcf3d" }] },
+    { "id": 2, "name": "Disabled Example", "enable": false, "fields": [{ "name": "password", "value": "LABDECK_SECRET_CANARY_7dcf3d" }] },
+    { "id": 3, "name": "Recovered Example", "enable": true },
+    { "id": 4, "name": "No Status Example", "enable": true }
+  ]
+}

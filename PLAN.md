@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M4 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, and M4 Arr live evidence pending; M5–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M5 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, M4 Arr, and M5 Prowlarr live evidence pending; M6–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -114,6 +114,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M3. Implement each service vertically; do not land two empty adapter shells first.
 
 ## M5 — Prowlarr health
+
+**Status:** M5.1–M5.2 fixture implementation complete 2026-09-24. Installed API/credential compatibility remains pending; see [M5 validation report](docs/plans/m5-validation-report.md).
 
 **Goal:** Show indexer/application health evidence without exposing sensitive provider configuration.
 

@@ -46,6 +46,15 @@ const downloadServiceSchema = z.object({
   catalog: z.object({ monitored: z.number().int().nonnegative(), missing: z.number().int().nonnegative(), upcoming: z.array(upcomingSchema).max(50), upcomingTruncated: z.boolean() }).nullable(),
   recentImports: z.array(importSchema).max(20)
 });
+const indexerHealthSchema = z.object({
+  configured: z.boolean(), name: z.string().nullable(), browserUrl: z.url().nullable(), connection: connectionSchema,
+  freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
+  failingTotal: z.number().int().nonnegative().nullable(), disabledTotal: z.number().int().nonnegative().nullable(),
+  warnings: z.array(z.object({ severity: z.enum(['notice', 'warning', 'error']), text: z.string() })).max(20),
+  indexers: z.array(z.object({ id: z.string(), name: z.string(), state: z.enum(['disabled', 'failing', 'no-active-failure']), lastFailureAt: timestampSchema.nullable(), disabledUntil: timestampSchema.nullable() })).max(1000),
+  applications: z.object({ connectivity: z.literal('unknown') })
+});
+export type IndexerHealthResponse = z.infer<typeof indexerHealthSchema>;
 export const eventSchema = z.object({ id: z.number().int(), kind: z.string(), severity: z.enum(['info', 'warning', 'critical']), observedAt: timestampSchema, entityId: z.string().nullable(), payload: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])) });
 
 export const overviewResponseSchema = z.discriminatedUnion('configured', [
@@ -53,7 +62,7 @@ export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
     host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(),
-    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), events: z.array(eventSchema).max(10) })
+    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable(), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -91,7 +100,7 @@ export const mediaResponseSchema = z.object({
 });
 export type MediaResponse = z.infer<typeof mediaResponseSchema>;
 
-export const downloadsResponseSchema = z.object({ configured: z.boolean(), services: z.array(downloadServiceSchema).max(2) });
+export const downloadsResponseSchema = z.object({ configured: z.boolean(), services: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable() });
 export type DownloadsResponse = z.infer<typeof downloadsResponseSchema>;
 
 const bytesSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);

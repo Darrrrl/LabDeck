@@ -22,6 +22,9 @@ import { ArrTransport } from '../integrations/arr/common/transport.js';
 import { ArrAdapter } from '../integrations/arr/adapter.js';
 import { ArrMonitor } from '../integrations/arr/monitor.js';
 import { ArrStateStore } from '../integrations/arr/state.js';
+import { ProwlarrAdapter, ProwlarrTransport } from '../integrations/prowlarr/adapter.js';
+import { ProwlarrMonitor } from '../integrations/prowlarr/monitor.js';
+import { ProwlarrStateStore } from '../integrations/prowlarr/state.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
 function exactEqual(left: string, right: string): boolean {
@@ -39,12 +42,15 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const hostState = new HostStateService(new HostStateStore(database));
   const jellyfinState = new JellyfinStateStore(database);
   const arrStates = (config.arr ?? []).map((item) => ({ config: item, state: new ArrStateStore(database, item.kind) }));
-  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && jellyfinState.historyAvailable && arrStates.every(({ state }) => state.historyAvailable), Date.now,
+  const prowlarrState = new ProwlarrStateStore(database);
+  const hostQueries = new HostQueries(database, config.hostSnapshotPath !== undefined, () => hostState.historyAvailable && jellyfinState.historyAvailable && arrStates.every(({ state }) => state.historyAvailable) && prowlarrState.historyAvailable, Date.now,
     config.jellyfin ? { id: config.jellyfin.id, name: config.jellyfin.name, browserUrl: config.jellyfin.browserUrl } : undefined,
-    (config.arr ?? []).map(({ id, name, browserUrl }) => ({ id, name, browserUrl })));
+    (config.arr ?? []).map(({ id, name, browserUrl }) => ({ id, name, browserUrl })),
+    config.prowlarr ? { id: 'prowlarr', name: 'Prowlarr', browserUrl: config.prowlarr.browserUrl } : undefined);
   const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
   const jellyfinMonitor = config.jellyfin ? new JellyfinMonitor(new JellyfinAdapter(new ReadOnlyTransport(config.jellyfin.baseUrl, config.jellyfin.apiKey)), jellyfinState) : undefined;
   const arrMonitors = arrStates.map(({ config: item, state }) => new ArrMonitor(new ArrAdapter(item.kind, new ArrTransport(item.baseUrl, item.apiKey)), state));
+  const prowlarrMonitor = config.prowlarr ? new ProwlarrMonitor(new ProwlarrAdapter(new ProwlarrTransport(config.prowlarr.baseUrl, config.prowlarr.apiKey)), prowlarrState) : undefined;
   const sessions = new SessionStore(database);
   if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
   const prelogin = new PreloginCsrfStore();
@@ -78,8 +84,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     }
     done();
   });
-  app.addHook('onReady', (done) => { hostMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); done(); });
-  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop())]); database.close(); });
+  app.addHook('onReady', (done) => { hostMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); prowlarrMonitor?.start(); done(); });
+  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop()), prowlarrMonitor?.stop()]); database.close(); });
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
     app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');

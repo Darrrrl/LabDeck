@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { DownloadsResponse, EventsResponse, HostCollectorSnapshot, MediaResponse, MediaSession, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import type { DownloadsResponse, EventsResponse, HostCollectorSnapshot, IndexerHealthResponse, MediaResponse, MediaSession, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
 
 type Capability = HostCollectorSnapshot['capabilities'][keyof HostCollectorSnapshot['capabilities']];
 type SummaryCapability = HostCollectorSnapshot['capabilities']['summary'];
@@ -14,6 +14,7 @@ type MediaCapability = { observedAt: string; data: { sessions: MediaSession[] } 
 type LibraryCapability = { observedAt: string; data: { counts: { movies: number; series: number; episodes: number }; recent: { id: string; name: string; type: 'movie' | 'series' | 'episode' | 'other'; seriesName: string | null; addedAt: string | null }[] } };
 interface MediaConfig { id: string; name: string; browserUrl: string }
 interface DownloadConfig { id: 'sonarr' | 'radarr'; name: string; browserUrl: string }
+interface IndexerConfig { id: 'prowlarr'; name: string; browserUrl: string }
 
 const iso = (value: number | null): string | null => value === null ? null : new Date(value).toISOString();
 const freshness = (observedAt: number | null, now: number): 'fresh' | 'stale' | 'never' => observedAt === null ? 'never' : now - observedAt > 30_000 ? 'stale' : 'fresh';
@@ -30,11 +31,12 @@ export class HostQueries {
     private readonly historyAvailable: () => boolean,
     private readonly now: () => number = Date.now,
     private readonly mediaConfig?: MediaConfig,
-    private readonly downloadConfigs: DownloadConfig[] = []
+    private readonly downloadConfigs: DownloadConfig[] = [],
+    private readonly indexerConfig?: IndexerConfig
   ) {}
 
   overview(): OverviewResponse {
-    if (!this.configured && !this.mediaConfig && this.downloadConfigs.length === 0) return { configured: false, overall: 'monitoring-incomplete', title: 'No integrations configured', message: 'Configure a supported integration to begin monitoring.' };
+    if (!this.configured && !this.mediaConfig && this.downloadConfigs.length === 0 && !this.indexerConfig) return { configured: false, overall: 'monitoring-incomplete', title: 'No integrations configured', message: 'Configure a supported integration to begin monitoring.' };
     const integration = this.integration();
     const summaryRow = this.capability('host.summary');
     const filesystemRow = this.capability('host.filesystems');
@@ -48,18 +50,24 @@ export class HostQueries {
     const storageStatus = storage && storage.usedRatio >= 0.95 ? 'critical' : storage && storage.usedRatio >= 0.9 ? 'warning' : undefined;
     const media = this.mediaSummary();
     const downloads = this.downloadServices();
-    const serviceProblem = [media?.connection, ...downloads.map((item) => item.connection)].some((connection) => connection === 'auth-error' || connection === 'unreachable');
-    const overall = storageStatus ?? (integration?.connection === 'unreachable' || serviceProblem ? 'warning' : currentFreshness === 'fresh' && (!media || media.freshness === 'fresh') ? 'healthy' : 'monitoring-incomplete');
+    const indexers = this.indexers();
+    const serviceProblem = [media?.connection, ...downloads.map((item) => item.connection), indexers?.connection].some((connection) => connection === 'auth-error' || connection === 'unreachable');
+    const indexerProblem = !!indexers && indexers.freshness === 'fresh' && ((indexers.failingTotal ?? 0) > 0 || indexers.warnings.some((item) => item.severity === 'warning' || item.severity === 'error'));
+    const overall = storageStatus ?? (integration?.connection === 'unreachable' || serviceProblem || indexerProblem ? 'warning' : (!this.configured || currentFreshness === 'fresh') && (!media || media.freshness === 'fresh') && (!indexers || indexers.freshness === 'fresh' && indexers.connection === 'reachable') ? 'healthy' : 'monitoring-incomplete');
     const title = overall === 'healthy' ? 'All observed systems healthy' : overall === 'critical' ? 'Critical storage pressure' : overall === 'warning' ? 'Needs attention' : 'Monitoring incomplete';
     const message = media?.connection === 'auth-error' ? 'Jellyfin rejected its configured credentials. Host observations remain available.'
       : media?.connection === 'unreachable' ? 'Jellyfin is unreachable. Showing its last successful observation.'
       : downloads.some((item) => item.connection === 'auth-error') ? 'A download service rejected its configured credentials. Other observations remain available.'
       : downloads.some((item) => item.connection === 'unreachable') ? 'A download service is unreachable. Showing its last successful observation.'
+      : indexers?.connection === 'auth-error' ? 'Prowlarr rejected its configured credentials. Other observations remain available.'
+      : indexers?.connection === 'unreachable' ? 'Prowlarr is unreachable. Showing its last successful observation.'
+      : indexerProblem ? 'Prowlarr reports indexer or service health issues.'
+      : indexers && indexers.freshness !== 'fresh' ? 'Prowlarr health evidence is missing or stale.'
       : integration?.connection === 'unreachable'
       ? 'The host collector cannot be read. Showing the last successful observation.'
       : currentFreshness === 'stale' ? 'Host data is stale. Check the collector service and snapshot mount.'
-      : currentFreshness === 'never' ? 'Waiting for the first valid host snapshot.'
-      : 'Host metrics are current.';
+      : this.configured && currentFreshness === 'never' ? 'Waiting for the first valid host snapshot.'
+      : this.configured ? 'Host metrics are current.' : 'Configured services are current.';
     return {
       configured: true, overall, title, message, freshness: currentFreshness, observedAt: iso(observedAt),
       lastAttemptAt: iso(integration?.attempted_at ?? null), errorCode: integration?.safe_error_code ?? null,
@@ -67,7 +75,7 @@ export class HostQueries {
       storage: storage ? { id: storage.id, path: storage.path, source: storage.source, fsType: storage.fsType, totalBytes: storage.totalBytes, usedBytes: storage.usedBytes, availableBytes: storage.availableBytes, reservedBytes: storage.reservedBytes, usedRatio: storage.usedRatio } : null,
       network: interfaces?.status === 'ok' ? interfaces.data[0] ?? null : null,
       diskIo: blockIo?.status === 'ok' ? blockIo.data[0] ?? null : null,
-      media, downloads,
+      media, downloads, indexers,
       events: this.events(5).events
     };
   }
@@ -125,7 +133,18 @@ export class HostQueries {
     };
   }
 
-  downloads(): DownloadsResponse { return { configured: this.downloadConfigs.length > 0, services: this.downloadServices() }; }
+  downloads(): DownloadsResponse { return { configured: this.downloadConfigs.length > 0 || !!this.indexerConfig, services: this.downloadServices(), indexers: this.indexers() }; }
+
+  indexers(): IndexerHealthResponse | null {
+    if (!this.indexerConfig) return null;
+    const row = this.capabilityFor('prowlarr', 'indexers.health');
+    const observation = parseJson<{ data: Pick<IndexerHealthResponse, 'indexers' | 'failingTotal' | 'disabledTotal' | 'warnings' | 'applications'> }>(row?.normalized_json);
+    return { configured: true, name: this.indexerConfig.name, browserUrl: this.indexerConfig.browserUrl,
+      connection: this.integrationFor('prowlarr')?.connection ?? 'unknown', freshness: freshnessWith(row?.observed_at ?? null, this.now(), 180_000),
+      observedAt: iso(row?.observed_at ?? null), errorCode: this.poll('prowlarr', 'health')?.safe_error_code ?? null,
+      failingTotal: observation?.data.failingTotal ?? null, disabledTotal: observation?.data.disabledTotal ?? null,
+      warnings: observation?.data.warnings ?? [], indexers: observation?.data.indexers ?? [], applications: { connectivity: 'unknown' } };
+  }
 
   settings(demoMode: boolean) {
     const integration = this.integration();
@@ -134,7 +153,8 @@ export class HostQueries {
       integrations: [
         ...(this.configured ? [{ id: 'host', name: 'Ubuntu host', connection: integration?.connection ?? 'unknown' as const, freshness: freshness(observedAt, this.now()), lastSuccessfulRefreshAt: iso(integration?.succeeded_at ?? null), safeErrorCode: integration?.safe_error_code ?? null }] : []),
         ...(this.mediaConfig ? [{ id: this.mediaConfig.id, name: this.mediaConfig.name, connection: this.integrationFor('jellyfin')?.connection ?? 'unknown' as const, freshness: this.media().playback.freshness, lastSuccessfulRefreshAt: this.media().playback.lastSuccessfulRefreshAt, safeErrorCode: this.integrationFor('jellyfin')?.safe_error_code ?? null }] : [])
-        ,...this.downloadConfigs.map((config) => { const integrationState = this.integrationFor(config.id); const queue = this.capabilityFor(config.id, 'downloads.queue'); return { id: config.id, name: config.name, connection: integrationState?.connection ?? 'unknown' as const, freshness: freshnessWith(queue?.observed_at ?? null, this.now(), 45_000), lastSuccessfulRefreshAt: iso(integrationState?.succeeded_at ?? null), safeErrorCode: integrationState?.safe_error_code ?? null }; })
+        ,...this.downloadConfigs.map((config) => { const integrationState = this.integrationFor(config.id); const queue = this.capabilityFor(config.id, 'downloads.queue'); return { id: config.id, name: config.name, connection: integrationState?.connection ?? 'unknown' as const, freshness: freshnessWith(queue?.observed_at ?? null, this.now(), 45_000), lastSuccessfulRefreshAt: iso(integrationState?.succeeded_at ?? null), safeErrorCode: integrationState?.safe_error_code ?? null }; }),
+        ...(this.indexerConfig ? [{ id: 'prowlarr', name: 'Prowlarr', connection: this.integrationFor('prowlarr')?.connection ?? 'unknown' as const, freshness: this.indexers()?.freshness ?? 'never' as const, lastSuccessfulRefreshAt: iso(this.integrationFor('prowlarr')?.succeeded_at ?? null), safeErrorCode: this.integrationFor('prowlarr')?.safe_error_code ?? null }] : [])
       ],
       authentication: 'configured' as const, demoMode, version: '0.2.0',
       hostCollector: { configured: this.configured, historyAvailable: this.historyAvailable(), message: this.configured ? 'Reading the configured snapshot file. The application has no host command or privilege path.' : 'Set LABDECK_HOST_SNAPSHOT_PATH and mount the collector public directory read-only.' }
