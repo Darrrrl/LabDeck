@@ -80,11 +80,15 @@ export class HostStateStore {
       for (const [name, capability] of Object.entries(snapshot.capabilities)) {
         if (!capability || capability.status !== 'ok') continue;
         if (name === 'docker' && oldDocker?.observedAt === capability.observedAt) continue;
+        if (name === 'tailscale') {
+          const old = this.database.prepare("SELECT observed_at FROM capability_state WHERE instance_id='host' AND capability='network.peers'").get() as { observed_at: number } | undefined;
+          if (old?.observed_at === Date.parse(capability.observedAt) || old && capability.completeness === 'partial') continue;
+        }
         this.database.prepare(`INSERT INTO capability_state(instance_id, capability, schema_version, observed_at, succeeded_at, normalized_json)
           VALUES (?, ?, '1', ?, ?, ?)
           ON CONFLICT(instance_id, capability) DO UPDATE SET schema_version = excluded.schema_version,
           observed_at = excluded.observed_at, succeeded_at = excluded.succeeded_at, normalized_json = excluded.normalized_json`)
-          .run(HOST_INSTANCE, name === 'docker' ? 'containers.inventory' : `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(capability));
+          .run(HOST_INSTANCE, name === 'docker' ? 'containers.inventory' : name === 'tailscale' ? 'network.peers' : `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(capability));
       }
 
       const docker = snapshot.capabilities.docker;
@@ -92,6 +96,14 @@ export class HostStateStore {
       else if (docker?.status === 'ok' && oldDocker?.observedAt !== docker.observedAt) {
         this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,last_success_at,attempted_at,safe_error_code) VALUES ('host','docker',?,?,NULL) ON CONFLICT(instance_id,group_id) DO UPDATE SET last_success_at=excluded.last_success_at,attempted_at=excluded.attempted_at,safe_error_code=NULL`).run(attemptedAt, attemptedAt);
         this.#dockerEvents(docker, oldDocker, attemptedAt);
+      }
+      const tailscale = snapshot.capabilities.tailscale;
+      if (tailscale?.status === 'error') this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,attempted_at,safe_error_code) VALUES ('host','tailscale',?,?) ON CONFLICT(instance_id,group_id) DO UPDATE SET attempted_at=excluded.attempted_at,safe_error_code=excluded.safe_error_code`).run(attemptedAt, tailscale.errorCode);
+      else if (tailscale?.status === 'ok' && tailscale.completeness === 'partial') {
+        this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,attempted_at,safe_error_code) VALUES ('host','tailscale',?,'partial-inventory') ON CONFLICT(instance_id,group_id) DO UPDATE SET attempted_at=excluded.attempted_at,safe_error_code='partial-inventory'`).run(attemptedAt);
+      } else if (tailscale?.status === 'ok') {
+        const previousPoll = this.database.prepare("SELECT last_success_at FROM poll_state WHERE instance_id='host' AND group_id='tailscale'").get() as { last_success_at: number | null } | undefined;
+        if (!previousPoll || previousPoll.last_success_at === null || previousPoll.last_success_at <= Date.parse(tailscale.observedAt)) this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,last_success_at,attempted_at,safe_error_code) VALUES ('host','tailscale',?,?,NULL) ON CONFLICT(instance_id,group_id) DO UPDATE SET last_success_at=excluded.last_success_at,attempted_at=excluded.attempted_at,safe_error_code=NULL`).run(attemptedAt, attemptedAt);
       }
 
       this.database.prepare(`INSERT INTO poll_state(instance_id, group_id, generation, sequence, last_success_at)

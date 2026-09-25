@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsup src/index.ts src/auth/hash-password-cli.ts --format esm --platform node --target node24 --clean --sourcemap",
+    "build": "tsup src/index.ts src/auth/hash-password-cli.ts src/db/maintenance-cli.ts --format esm --platform node --target node24 --clean --sourcemap",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "password:hash": "node --import tsx src/auth/hash-password-cli.ts",

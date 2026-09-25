@@ -7,7 +7,7 @@ async function files(path) {
   return nested.flat();
 }
 
-const forbidden = ['LABDECK_SECRET_CANARY_7dcf3d', 'X-Api-Key', '/var/run/docker.sock'];
+const forbidden = ['LABDECK_SECRET_CANARY_7dcf3d', 'TS_SECRET_CANARY', 'X-Api-Key', '/var/run/docker.sock', 'tailscaled.sock'];
 const targets = [...await files(resolve('apps/web/dist')), resolve('deploy/compose/compose.example.yml'), resolve('deploy/compose/compose.host.yml'), resolve('deploy/compose/compose.smart.yml'), resolve('deploy/compose/compose.jellyfin.yml'), resolve('deploy/compose/compose.sonarr.yml'), resolve('deploy/compose/compose.radarr.yml'), resolve('deploy/compose/compose.prowlarr.yml')];
 const violations = [];
 for (const target of targets) {

@@ -33,6 +33,7 @@ type Config struct {
 	Interfaces           []Entity     `json:"interfaces"`
 	BlockDevices         []Entity     `json:"blockDevices"`
 	Docker               bool         `json:"docker"`
+	Tailscale            bool         `json:"tailscale"`
 	SmartOutputDirectory string       `json:"smartOutputDirectory"`
 	SmartDisks           []SmartDisk  `json:"smartDisks"`
 }

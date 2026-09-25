@@ -81,7 +81,7 @@ test('overview and media answer first-release questions across mixed states', as
     configured: true, overall: 'healthy', title: 'All observed systems healthy', message: 'Host metrics are current.', freshness: 'fresh', observedAt, lastAttemptAt: observedAt, errorCode: null,
     host: { hostname: 'synthetic-server', uptimeSeconds: 86400, cpu: { model: 'Synthetic 4-Core CPU', logicalProcessors: 4, utilizationPercent: 18.5 }, load: { one: .4, five: .3, fifteen: .2 }, memory: { totalBytes: 16_000_000_000, usedBytes: 8_000_000_000, availableBytes: 8_000_000_000 }, swap: { totalBytes: 2_000_000_000, usedBytes: 0, freeBytes: 2_000_000_000 } },
     storage: { id: 'data', path: '/srv/data', source: '/dev/synthetic', fsType: 'ext4', totalBytes: 1_000_000_000_000, usedBytes: 600_000_000_000, availableBytes: 390_000_000_000, reservedBytes: 10_000_000_000, usedRatio: .6 }, network: null, diskIo: null,
-    media: { id: 'jellyfin', name: 'Jellyfin', browserUrl: mediaResponse.browserUrl, connection: 'reachable', freshness: 'fresh', observedAt, lastSuccessfulRefreshAt: observedAt, errorCode: null, sessions }, downloads: [], indexers: null, containers: null, disks: null, events: []
+    media: { id: 'jellyfin', name: 'Jellyfin', browserUrl: mediaResponse.browserUrl, connection: 'reachable', freshness: 'fresh', observedAt, lastSuccessfulRefreshAt: observedAt, errorCode: null, sessions }, downloads: [], indexers: null, containers: null, disks: null, tailscale: null, events: []
   }) }));
   await signIn(page);
   await expect(page.getByText('All observed systems healthy')).toBeVisible();
@@ -134,5 +134,20 @@ test('containers show a 50-item mixed inventory and read-only detail without pho
   await expect(page.getByText('service-49')).toBeVisible();
   await page.getByText('service-1', { exact: true }).click();
   await expect(page.locator('details[open]').getByText('Working set (cache excluded)')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test('network shows local peers, unknown last-seen and stale evidence on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const observedAt = new Date(Date.now() - 3 * 60_000).toISOString();
+  await page.route('**/api/v1/network', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, freshness: 'stale', observedAt, errorCode: 'permission-denied', backendState: 'Running', inventoryComplete: true, total: 2, online: 1, version: '1.90-synthetic', selfName: 'lab-server', selfIPs: ['100.101.102.103'], peers: [
+    { id: 'n-a', name: 'laptop', ips: ['100.101.102.104'], online: true, lastSeen: null },
+    { id: 'n-b', name: 'tablet', ips: ['100.101.102.105'], online: false, lastSeen: null }
+  ] }) }));
+  await signIn(page); await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Network' }).click();
+  await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible();
+  await expect(page.getByText('1 online / 2 known')).toBeVisible();
+  await expect(page.getByText('Last seen unknown')).toBeVisible();
+  await expect(page.getByText(/Local status read failed \(permission-denied\)/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });

@@ -81,6 +81,11 @@ CREATE INDEX events_observed_at ON events(observed_at DESC, id DESC);
 `
 ALTER TABLE poll_state ADD COLUMN attempted_at INTEGER;
 ALTER TABLE poll_state ADD COLUMN safe_error_code TEXT;
+`,
+`
+CREATE TABLE event_dedupe (dedupe_key TEXT PRIMARY KEY, observed_at INTEGER NOT NULL);
+INSERT OR IGNORE INTO event_dedupe(dedupe_key, observed_at) SELECT dedupe_key, observed_at FROM events;
+CREATE INDEX event_dedupe_observed_at ON event_dedupe(observed_at);
 `
 ];
 

@@ -5,6 +5,7 @@ import helmet from '@fastify/helmet';
 import staticFiles from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { historyRangeSchema } from '@labdeck/contracts';
 import { LoginLimiter } from '../auth/login-limiter.js';
 import { verifyPassword } from '../auth/password.js';
 import { PreloginCsrfStore } from '../auth/prelogin-csrf.js';
@@ -72,6 +73,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 64 * 1024
   });
+  let checkpointTimer: ReturnType<typeof setInterval> | undefined;
 
   await app.register(cookie);
   await app.register(helmet, {
@@ -89,8 +91,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     }
     done();
   });
-  app.addHook('onReady', (done) => { hostMonitor?.start(); smartMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); prowlarrMonitor?.start(); done(); });
-  app.addHook('onClose', async () => { await Promise.all([hostMonitor?.stop(), smartMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop()), prowlarrMonitor?.stop()]); database.close(); });
+  app.addHook('onReady', (done) => { hostMonitor?.start(); smartMonitor?.start(); jellyfinMonitor?.start(); for (const monitor of arrMonitors) monitor.start(); prowlarrMonitor?.start(); checkpointTimer = setInterval(() => { try { database.pragma('wal_checkpoint(PASSIVE)'); } catch { hostState.historyAvailable = false; } }, 60 * 60_000); checkpointTimer.unref(); done(); });
+  app.addHook('onClose', async () => { if (checkpointTimer) clearInterval(checkpointTimer); await Promise.all([hostMonitor?.stop(), smartMonitor?.stop(), jellyfinMonitor?.stop(), ...arrMonitors.map((monitor) => monitor.stop()), prowlarrMonitor?.stop()]); database.close(); });
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null && 'validation' in error) { void reply.code(400).send({ error: 'invalid-request' }); return; }
     app.log.error({ err: { name: error instanceof Error ? error.name : 'UnknownError' } }, 'request failed');
@@ -156,12 +158,12 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   });
   app.get('/api/v1/system', (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const range = (request.query as { range?: string }).range === '24h' ? '24h' : '1h';
+    const range = historyRangeSchema.safeParse((request.query as { range?: string }).range).data ?? '1h';
     return hostQueries.system(range);
   });
   app.get('/api/v1/storage', (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const range = (request.query as { range?: string }).range === '24h' ? '24h' : '1h';
+    const range = historyRangeSchema.safeParse((request.query as { range?: string }).range).data ?? '1h';
     return hostQueries.storage(range);
   });
   app.get('/api/v1/events', (request, reply) => {
@@ -178,6 +180,13 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   });
   app.get('/api/v1/downloads', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.downloads(); });
   app.get('/api/v1/containers', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.containers(); });
+  app.get('/api/v1/network', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.network(); });
+  app.get('/api/v1/metrics', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const parsed = z.object({ name: z.enum(['library.movies', 'library.series', 'library.episodes', 'filesystem.used', 'filesystem.available']), range: historyRangeSchema, entity: z.string().regex(/^[a-zA-Z0-9:_-]{1,80}$/).optional() }).strict().safeParse(request.query);
+    if (!parsed.success || parsed.data.name.startsWith('filesystem.') && !parsed.data.entity) return reply.code(400).send({ error: 'invalid-request' });
+    return { name: parsed.data.name, range: parsed.data.range, points: hostQueries.metric(parsed.data.name, parsed.data.range, parsed.data.name.startsWith('library.') ? 'jellyfin' : parsed.data.entity, parsed.data.name.startsWith('library.') ? 'jellyfin' : 'host') };
+  });
   app.get('/api/v1/settings', (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return hostQueries.settings(config.demoMode);

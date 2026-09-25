@@ -1,0 +1,11 @@
+{
+  "Version":"1.90.0-synthetic",
+  "BackendState":"Running",
+  "TailscaleIPs":["100.101.102.103","fd7a:115c:a1e0::1"],
+  "Self":{"HostName":"lab-server","TailscaleIPs":["100.101.102.103"],"UserID":1234,"PublicKey":"TS_SECRET_CANARY"},
+  "Peer":{
+    "nodekey:synthetic-a":{"ID":"n-peer-a","HostName":"laptop","TailscaleIPs":["100.101.102.104"],"Online":true,"LastSeen":"0001-01-01T00:00:00Z","UserID":1234,"PublicKey":"TS_SECRET_CANARY"},
+    "nodekey:synthetic-b":{"ID":"n-peer-b","DNSName":"tablet.synthetic.ts.net.","TailscaleIPs":["100.101.102.105"],"Online":false,"LastSeen":"2026-09-20T10:00:00Z","UserID":5678,"PublicKey":"TS_SECRET_CANARY"}
+  },
+  "User":{"1234":{"LoginName":"private@example.test","ProfilePicURL":"https://private.invalid"}}
+}

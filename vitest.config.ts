@@ -16,7 +16,7 @@ export default defineConfig({
         test: {
           name: 'foundation',
           include: ['apps/**/*.integration.test.ts'],
-          exclude: ['apps/**/*.host.integration.test.ts', 'apps/**/*.jellyfin.integration.test.ts', 'apps/**/*.arr.integration.test.ts']
+          exclude: ['apps/**/*.host.integration.test.ts', 'apps/**/*.jellyfin.integration.test.ts', 'apps/**/*.arr.integration.test.ts', 'apps/**/*.network.integration.test.ts', 'apps/**/*.persistence.integration.test.ts']
         }
       },
       {
@@ -48,6 +48,14 @@ export default defineConfig({
       {
         extends: true,
         test: { name: 'smart', include: ['apps/**/*.smart.integration.test.ts'] }
+      },
+      {
+        extends: true,
+        test: { name: 'network', include: ['apps/**/*.network.integration.test.ts'] }
+      },
+      {
+        extends: true,
+        test: { name: 'persistence', include: ['apps/**/*.persistence.integration.test.ts'] }
       }
     ]
   }

@@ -104,4 +104,15 @@ describe('foundation HTTP API', () => {
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.headers['cache-control']).toBe('no-store');
   });
+  it('bounds cached metric requests and never invokes a host read from the browser route', async () => {
+    const app = await buildApp(config()); apps.push(app);
+    const loggedIn = await login(app); const cookie = cookieValue(loggedIn.headers['set-cookie'], '__Host-labdeck_session');
+    const headers = { host: 'labdeck.test', cookie };
+    const history = await app.inject({ method: 'GET', url: '/api/v1/metrics?name=library.movies&range=400d', headers });
+    expect(history.statusCode).toBe(200); expect(history.json()).toEqual({ name: 'library.movies', range: '400d', points: [] });
+    expect(history.headers['cache-control']).toBe('no-store');
+    expect((await app.inject({ method: 'GET', url: '/api/v1/metrics?name=filesystem.used&range=400d', headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/metrics?name=library.movies&range=401d', headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/network', headers })).json()).toMatchObject({ configured: false, peers: [] });
+  });
 });

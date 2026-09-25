@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { telemetryPermitted } from '../db/persistence.js';
 
 export interface EventCandidate {
   instanceId: string;
@@ -13,14 +14,22 @@ export interface EventCandidate {
 }
 
 export function persistEvent(database: Database.Database, event: EventCandidate): void {
-  database.prepare(`INSERT OR IGNORE INTO events(instance_id, entity_id, kind, severity, occurred_at, observed_at, origin, dedupe_key, payload_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    event.instanceId, event.entityId ?? null, event.kind, event.severity, event.occurredAt ?? null,
-    event.observedAt, event.origin, event.dedupeKey, JSON.stringify(event.payload)
-  );
+  if (!telemetryPermitted(database)) return;
+  database.transaction(() => {
+    const inserted = database.prepare('INSERT OR IGNORE INTO event_dedupe(dedupe_key,observed_at) VALUES (?,?)').run(event.dedupeKey, event.observedAt);
+    if (inserted.changes === 0) return;
+    database.prepare(`INSERT OR IGNORE INTO events(instance_id, entity_id, kind, severity, occurred_at, observed_at, origin, dedupe_key, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      event.instanceId, event.entityId ?? null, event.kind, event.severity, event.occurredAt ?? null,
+      event.observedAt, event.origin, event.dedupeKey, JSON.stringify(event.payload)
+    );
+  })();
 }
 
 export function retainEvents(database: Database.Database, now: number): void {
+  database.prepare(`DELETE FROM event_dedupe WHERE dedupe_key IN (
+    SELECT dedupe_key FROM event_dedupe WHERE observed_at < ? ORDER BY observed_at LIMIT 1000
+  )`).run(now - 400 * 24 * 60 * 60 * 1_000);
   database.prepare(`DELETE FROM events WHERE id IN (
     SELECT id FROM events WHERE observed_at < ? ORDER BY observed_at LIMIT 1000
   )`).run(now - 90 * 24 * 60 * 60 * 1_000);

@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M7 fixture implementation complete; M2 Ubuntu, M3 Jellyfin, M4 Arr, M5 Prowlarr, M6 Docker, and M7 SMART live evidence pending; M8–M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M8 fixture implementation complete. M2 Ubuntu, M3 Jellyfin, M4 Arr, M5 Prowlarr, M6 Docker, M7 SMART, and M8 Tailscale/operational live evidence remain pending; M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -180,6 +180,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M6 release sequence, M2 filesystem/metrics foundation. Do not mark hardware validation complete on macOS or synthetic fixtures alone.
 
 ## M8 — Tailscale and durable history hardening
+
+**Status:** M8.1–M8.3 fixture implementation complete 2026-09-25; see [M8 validation report](docs/plans/m8-validation-report.md). Installed Tailscale permission/version, DB disk-pressure behavior, measured growth and restore drill remain live gates.
 
 **Goal:** Finish network visibility and prove bounded local history/events survive real operational failures.
 

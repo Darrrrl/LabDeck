@@ -4,8 +4,8 @@ import { hostname, platform } from 'node:os';
 import { resolve } from 'node:path';
 
 const provider = process.argv.find((argument) => argument.startsWith('--provider='))?.slice('--provider='.length);
-if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'docker', 'smart'].includes(provider)) {
-  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr|prowlarr|docker|smart');
+if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'docker', 'smart', 'tailscale'].includes(provider)) {
+  console.error('Usage: npm run test:live -- --provider=host|jellyfin|sonarr|radarr|prowlarr|docker|smart|tailscale');
   process.exitCode = 1;
 } else if (provider === 'jellyfin') {
   await checkJellyfin();
@@ -17,6 +17,8 @@ if (!['host', 'jellyfin', 'sonarr', 'radarr', 'prowlarr', 'docker', 'smart'].inc
   checkDocker();
 } else if (provider === 'smart') {
   checkSmart();
+} else if (provider === 'tailscale') {
+  checkTailscale();
 } else if (process.env.LABDECK_LIVE_TEST !== 'true') {
   console.log('SKIP host live validation: set LABDECK_LIVE_TEST=true after reviewing the collector setup.');
 } else if (platform() !== 'linux') {
@@ -153,6 +155,23 @@ function checkSmart() {
   }
   console.log(`PASS SMART live snapshot validation: ${snapshot.disks.length} projected disks; no raw device read by the live checker.`);
   console.log('NOTE physical device, smartctl version, exit bits, standby behavior and permissions still require operator comparison on Ubuntu.');
+}
+function checkTailscale() {
+  if (process.env.LABDECK_LIVE_TEST !== 'true') { console.log('SKIP Tailscale live validation: set LABDECK_LIVE_TEST=true after reviewing local status privacy and permissions.'); return; }
+  if (platform() !== 'linux') { console.log('SKIP Tailscale live validation: an Ubuntu/Linux host is required.'); return; }
+  const configuredPath = process.env.LABDECK_HOST_SNAPSHOT_PATH; if (!configuredPath) throw new Error('LABDECK_HOST_SNAPSHOT_PATH is required');
+  const snapshotPath = resolve(configuredPath); const stat = lstatSync(snapshotPath);
+  assert(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 2 * 1024 * 1024, 'host snapshot must be a bounded regular non-symlink file');
+  const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')); const status = snapshot.capabilities?.tailscale;
+  assert(snapshot.schemaVersion === '1' && status?.status === 'ok', 'Tailscale observation unavailable');
+  assert(Math.abs(Date.now() - Date.parse(status.observedAt)) <= 90_000, 'Tailscale observation stale or future-dated');
+  assert(Array.isArray(status.data?.peers) && status.data.peers.length <= 250, 'Tailscale peer inventory invalid');
+  for (const peer of status.data.peers) {
+    assert(typeof peer.id === 'string' && typeof peer.online === 'boolean' && Array.isArray(peer.ips), 'Tailscale peer projection invalid');
+    assert(!['PublicKey', 'UserID', 'User', 'Addrs', 'Endpoints', 'Profiles'].some((key) => key in peer), 'Tailscale private field escaped projection');
+  }
+  console.log(`PASS Tailscale live snapshot validation: ${status.data.peers.length} locally known projected peers; no Tailscale CLI or daemon read by the checker.`);
+  console.log('NOTE operator comparison with the installed local client and permission matrix remains required.');
 }
 function kindLabel(baseUrl) { return baseUrl.hostname || 'Arr'; }
 

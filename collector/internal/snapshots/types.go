@@ -21,6 +21,7 @@ type Capabilities struct {
 	Interfaces  Capability[[]NetworkInterface] `json:"interfaces"`
 	BlockIO     Capability[[]BlockDeviceIO]    `json:"blockIo"`
 	Docker      *Capability[DockerInventory]   `json:"docker,omitempty"`
+	Tailscale   *Capability[TailscaleStatus]   `json:"tailscale,omitempty"`
 }
 
 type Capability[T any] struct {
@@ -114,4 +115,20 @@ type DockerContainer struct {
 	MemoryLimitBytes *uint64    `json:"memoryLimitBytes"`
 	MemoryKind       string     `json:"memoryKind"`
 	StatsObservedAt  *time.Time `json:"statsObservedAt"`
+}
+
+type TailscaleStatus struct {
+	Version           string          `json:"version"`
+	BackendState      string          `json:"backendState"`
+	SelfName          string          `json:"selfName"`
+	SelfIPs           []string        `json:"selfIPs"`
+	InventoryComplete bool            `json:"inventoryComplete"`
+	Peers             []TailscalePeer `json:"peers"`
+}
+type TailscalePeer struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	IPs      []string   `json:"ips"`
+	Online   bool       `json:"online"`
+	LastSeen *time.Time `json:"lastSeen"`
 }

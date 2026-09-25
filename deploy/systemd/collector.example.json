@@ -13,6 +13,7 @@
     { "id": "system-disk", "name": "sda" }
   ],
   "docker": false,
+  "tailscale": false,
   "smartOutputDirectory": "/var/lib/labdeck-collector/public/smart",
   "smartDisks": []
 }

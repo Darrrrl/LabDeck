@@ -89,3 +89,10 @@ form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; 
 @media (max-width: 760px) { .container-detail { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 430px) { .container-detail { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.peer-list { display: grid; gap: .5rem; }
+.peer-row { display: flex; align-items: start; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-top: 1px solid var(--border); }
+.peer-row h3 { margin: 0 0 .2rem; overflow-wrap: anywhere; }
+.peer-row p { margin: 0; overflow-wrap: anywhere; }
+.peer-row > div:last-child { text-align: right; flex-shrink: 0; }
+@media (max-width: 520px) { .peer-row { flex-direction: column; } .peer-row > div:last-child { text-align: left; } }
+@media (max-width: 760px) { .detail-toolbar { flex-wrap: wrap; } .detail-toolbar .segmented { margin-left: 0; max-width: 100%; overflow-x: auto; } }

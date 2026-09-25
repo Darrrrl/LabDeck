@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
+import { telemetryPermitted } from '../db/persistence.js';
 
 export interface MetricObservation {
   instanceId: string;
@@ -8,12 +9,13 @@ export interface MetricObservation {
   unit: string;
   value: number | null;
   observedAt: number;
+  sampleIntervalMs?: number;
 }
 
 const resolutions = [
-  { id: '1m', milliseconds: 60_000, expected: 12, retention: 48 * 60 * 60 * 1_000 },
-  { id: '15m', milliseconds: 15 * 60_000, expected: 180, retention: 30 * 24 * 60 * 60 * 1_000 },
-  { id: '1h', milliseconds: 60 * 60_000, expected: 720, retention: 400 * 24 * 60 * 60 * 1_000 }
+  { id: '1m', milliseconds: 60_000, retention: 48 * 60 * 60 * 1_000 },
+  { id: '15m', milliseconds: 15 * 60_000, retention: 30 * 24 * 60 * 60 * 1_000 },
+  { id: '1h', milliseconds: 60 * 60_000, retention: 400 * 24 * 60 * 60 * 1_000 }
 ] as const;
 
 function seriesId(metric: MetricObservation): string {
@@ -21,6 +23,7 @@ function seriesId(metric: MetricObservation): string {
 }
 
 export function persistMetrics(database: Database.Database, observations: readonly MetricObservation[], now: number): void {
+  if (!telemetryPermitted(database)) return;
   const seriesCount = (database.prepare('SELECT count(*) AS count FROM metric_series').get() as { count: number }).count;
   let admitted = seriesCount;
   for (const observation of observations) {
@@ -30,7 +33,7 @@ export function persistMetrics(database: Database.Database, observations: readon
     if (!known) {
       if (admitted >= 400) continue;
       database.prepare(`INSERT INTO metric_series(series_id, instance_id, entity_id, metric_name, unit, sampling_class)
-        VALUES (?, ?, ?, ?, ?, 'fast')`).run(id, observation.instanceId, observation.entityId, observation.name, observation.unit);
+        VALUES (?, ?, ?, ?, ?, ?)`).run(id, observation.instanceId, observation.entityId, observation.name, observation.unit, (observation.sampleIntervalMs ?? 5_000) >= 60_000 ? 'slow' : 'fast');
       admitted += 1;
     }
     for (const resolution of resolutions) {
@@ -40,7 +43,7 @@ export function persistMetrics(database: Database.Database, observations: readon
         ON CONFLICT(series_id, resolution, bucket_start) DO UPDATE SET
           count = count + 1, sum = sum + excluded.sum, min = min(min, excluded.min), max = max(max, excluded.max),
           last = excluded.last, last_at = excluded.last_at`).run(
-        id, resolution.id, bucketStart, resolution.expected, observation.value, observation.value, observation.value, observation.value, observation.observedAt
+        id, resolution.id, bucketStart, resolution.milliseconds / (observation.sampleIntervalMs ?? 5_000), observation.value, observation.value, observation.value, observation.value, observation.observedAt
       );
     }
   }

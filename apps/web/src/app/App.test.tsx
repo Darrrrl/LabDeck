@@ -24,12 +24,12 @@ describe('LabDeck shell', () => {
     const mockFetch = vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.endsWith('/session')) return Promise.resolve(new Response(JSON.stringify({ authenticated: true, csrfToken: 'csrf-token-which-is-long-enough', demoMode: false }), { status: 200 }));
-      if (url.endsWith('/settings')) return Promise.resolve(new Response(JSON.stringify({ integrations: [], authentication: 'configured', demoMode: false, version: '0.2.0', hostCollector: { configured: false, historyAvailable: true, message: 'Not configured' } }), { status: 200 }));
+      if (url.endsWith('/settings')) return Promise.resolve(new Response(JSON.stringify({ integrations: [], authentication: 'configured', demoMode: false, version: '0.2.0', hostCollector: { configured: false, historyAvailable: true, message: 'Not configured' }, persistence: { databaseBytes: 0, walBytes: 0, freeBytes: null, seriesCount: 0, eventCount: 0, pressure: 'normal' } }), { status: 200 }));
       return Promise.resolve(new Response(JSON.stringify({ configured: false, overall: 'monitoring-incomplete', title: 'No integrations configured', message: 'Configure a supported integration to begin monitoring.' }), { status: 200 }));
     });
     renderApp(mockFetch);
     expect(await screen.findByRole('heading', { name: 'No integrations configured' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('OverviewSystemStorageMediaDownloadsContainersEventsSettings');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('OverviewSystemStorageMediaDownloadsContainersNetworkEventsSettings');
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
     await waitFor(() => expect(window.location.pathname).toBe('/settings'));
   });

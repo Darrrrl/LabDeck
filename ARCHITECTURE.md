@@ -1,6 +1,6 @@
 # Architecture
 
-Status: accepted baseline, updated through the M7 fixture implementation on 2026-09-24. Later-milestone code/module names remain proposed until their slice begins.
+Status: accepted baseline, updated for the M8 fixture implementation on 2026-09-25. M9 release work remains proposed.
 
 ## System shape
 
@@ -85,6 +85,10 @@ Start with a maximum of 400 retained series; default per-container history is of
 Persistence failures must not crash collection or falsely mark a successful durable write. Last good in-memory state remains available; show history unavailable. Startup migration failure stops readiness and polling; never silently create a replacement empty database.
 
 Backups use SQLite's online backup API into a separate target, followed by integrity verification. Do not copy a live DB file without its WAL coordination. Back up configuration separately and secrets through the owner's chosen secure mechanism. Restore with app stopped, verify schema/integrity, clear sessions, then start the matching app version. No automatic down-migrations; retain the pre-upgrade backup.
+
+M8 adds a packaged [backup/restore command](docs/operations/backup-restore.md) that creates only new files and clears sessions in the restored copy; replacement of the stopped app's active database remains an explicit operator step. SQLite pressure diagnostics and bounded trimming are visible in Settings. M8's local Tailscale reader projects only locally known status from the ordinary collector, with no Tailscale access granted to the app.
+
+The anticipated asynchronous telemetry write queue was not introduced; the single writer uses short synchronous transactions and bounded admission instead. This is a deliberate [M8 persistence decision](docs/decisions/003-synchronous-sqlite-telemetry.md), with reference-host latency measurements deferred to M9.
 
 ## Planned repository structure
 

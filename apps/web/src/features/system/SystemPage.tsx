@@ -4,9 +4,10 @@ import { getSystem } from '../../app/api.js';
 import { bytes, duration, relativeTime } from '../../components/format.js';
 import { Sparkline } from '../../components/Sparkline.js';
 import { Status } from '../../components/Status.js';
+import type { HistoryRange } from '@labdeck/contracts';
 
 export function SystemPage() {
-  const [range, setRange] = useState<'1h' | '24h'>('1h');
+  const [range, setRange] = useState<HistoryRange>('1h');
   const query = useQuery({ queryKey: ['system', range], queryFn: () => getSystem(range), refetchInterval: 10_000 });
   return <main id="main-content" tabIndex={-1}><PageHeader title="System" eyebrow="HOST" />
     {query.data ? <><div className="detail-toolbar"><Status tone={query.data.freshness === 'fresh' ? 'healthy' : 'unknown'}>{query.data.freshness === 'fresh' ? 'Current' : 'Stale'}</Status><span>Observed {relativeTime(query.data.observedAt)}</span><Range value={range} onChange={setRange} /></div>
@@ -21,6 +22,6 @@ export function SystemPage() {
   </main>;
 }
 function PageHeader({ title, eyebrow }: { title: string; eyebrow: string }) { return <header className="page-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1></div></header>; }
-function Range({ value, onChange }: { value: '1h' | '24h'; onChange: (value: '1h' | '24h') => void }) { return <div className="segmented" aria-label="History range">{(['1h', '24h'] as const).map((range) => <button key={range} className={value === range ? 'active' : ''} onClick={() => onChange(range)}>{range}</button>)}</div>; }
+function Range({ value, onChange }: { value: HistoryRange; onChange: (value: HistoryRange) => void }) { return <div className="segmented" aria-label="History range">{(['1h', '24h', '7d', '30d', '400d'] as const).map((range) => <button key={range} className={value === range ? 'active' : ''} onClick={() => onChange(range)}>{range}</button>)}</div>; }
 function Empty({ message }: { message: string }) { return <section className="notice"><Status tone="unknown">Monitoring incomplete</Status><h2>No current system observation</h2><p>{message}</p></section>; }
 function rate(value: number | null): string { return value === null ? 'Collecting' : `${bytes(value)}/s`; }

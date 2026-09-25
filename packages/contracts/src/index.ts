@@ -10,6 +10,9 @@ const timestampSchema = z.iso.datetime({ offset: true });
 const freshnessSchema = z.enum(['fresh', 'stale', 'never']);
 const overallStatusSchema = z.enum(['healthy', 'warning', 'critical', 'monitoring-incomplete']);
 const metricPointSchema = z.object({ at: timestampSchema, value: z.number(), coverage: z.number().min(0).max(1) });
+export const historyRangeSchema = z.enum(['1h', '24h', '7d', '30d', '400d']);
+export type HistoryRange = z.infer<typeof historyRangeSchema>;
+export const metricHistoryResponseSchema = z.object({ name: z.string(), range: historyRangeSchema, points: z.array(metricPointSchema).max(1000) });
 const hostSummaryDataSchema = z.object({
   hostname: z.string(), uptimeSeconds: z.number(),
   cpu: z.object({ model: z.string(), logicalProcessors: z.number().int(), utilizationPercent: z.number().nullable() }),
@@ -61,6 +64,10 @@ const containerSummarySchema = z.object({ configured: z.boolean(), freshness: fr
   unhealthy: z.number().int().nonnegative().nullable(), expectedStopped: z.number().int().nonnegative().nullable() });
 export const containersResponseSchema = containerSummarySchema.extend({ containers: z.array(dockerContainerSchema.extend({ expectedRunning: z.boolean() })).max(100) });
 export type ContainersResponse = z.infer<typeof containersResponseSchema>;
+const tailscalePeerSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), name: z.string().max(128), ips: z.array(z.ipv4().or(z.ipv6())).max(2), online: z.boolean(), lastSeen: timestampSchema.nullable() });
+const tailscaleSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(), backendState: z.string().nullable(), inventoryComplete: z.boolean().nullable(), total: z.number().int().nonnegative().nullable(), online: z.number().int().nonnegative().nullable() });
+export const networkResponseSchema = tailscaleSummarySchema.extend({ version: z.string().nullable(), selfName: z.string().nullable(), selfIPs: z.array(z.ipv4().or(z.ipv6())).max(2), peers: z.array(tailscalePeerSchema).max(250) });
+export type NetworkResponse = z.infer<typeof networkResponseSchema>;
 const downloadQueueEntrySchema = z.object({ source: z.enum(['sonarr', 'radarr']), id: z.string(), title: z.string(), sizeBytes: z.number().nonnegative().nullable(), remainingBytes: z.number().nonnegative().nullable(), progressRatio: z.number().min(0).max(1).nullable(), eta: timestampSchema.nullable(), stage: z.enum(['downloading', 'import-pending', 'warning', 'unknown']), warnings: z.array(z.string()).max(5) });
 const upcomingSchema = z.object({ id: z.string(), title: z.string(), date: timestampSchema.nullable(), releaseKind: z.enum(['episode-air', 'digital', 'physical', 'theatrical', 'unknown']) });
 const importSchema = z.object({ id: z.string(), title: z.string(), importedAt: timestampSchema.nullable() });
@@ -86,7 +93,7 @@ export const overviewResponseSchema = z.discriminatedUnion('configured', [
   z.object({ configured: z.literal(true), overall: overallStatusSchema, title: z.string(), message: z.string(), freshness: freshnessSchema,
     observedAt: timestampSchema.nullable(), lastAttemptAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
     host: hostSummaryDataSchema.nullable(), storage: filesystemDataSchema.nullable(), network: networkDataSchema.nullable(), diskIo: blockIoDataSchema.nullable(),
-    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable(), containers: containerSummarySchema.nullable(), disks: smartSummarySchema.nullable(), events: z.array(eventSchema).max(10) })
+    media: mediaSummarySchema.nullable(), downloads: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable(), containers: containerSummarySchema.nullable(), disks: smartSummarySchema.nullable(), tailscale: tailscaleSummarySchema.nullable(), events: z.array(eventSchema).max(10) })
 ]);
 
 export type OverviewResponse = z.infer<typeof overviewResponseSchema>;
@@ -100,14 +107,15 @@ export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export const settingsResponseSchema = z.object({
   integrations: z.array(z.object({ id: z.string(), name: z.string(), connection: z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']), freshness: freshnessSchema, lastSuccessfulRefreshAt: timestampSchema.nullable(), safeErrorCode: z.string().nullable() })),
   authentication: z.literal('configured'), demoMode: z.boolean(), version: z.string(),
-  hostCollector: z.object({ configured: z.boolean(), historyAvailable: z.boolean(), message: z.string() })
+  hostCollector: z.object({ configured: z.boolean(), historyAvailable: z.boolean(), message: z.string() }),
+  persistence: z.object({ databaseBytes: z.number().nonnegative(), walBytes: z.number().nonnegative(), freeBytes: z.number().nonnegative().nullable(), seriesCount: z.number().int().nonnegative(), eventCount: z.number().int().nonnegative(), pressure: z.enum(['normal', 'trimming', 'paused']) })
 });
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 
 export const systemResponseSchema = z.object({
   configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), data: hostSummaryDataSchema.nullable(),
   interfaces: z.array(networkDataSchema), blockIo: z.array(blockIoDataSchema),
-  trends: z.object({ range: z.enum(['1h', '24h']), cpu: z.array(metricPointSchema), memory: z.array(metricPointSchema) })
+  trends: z.object({ range: historyRangeSchema, cpu: z.array(metricPointSchema).max(1000), memory: z.array(metricPointSchema).max(1000) })
 });
 export type SystemResponse = z.infer<typeof systemResponseSchema>;
 
@@ -160,6 +168,10 @@ export const hostCollectorSnapshotSchema = z.object({
     docker: z.discriminatedUnion('status', [
       z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.enum(['complete', 'partial']), data: z.object({ apiVersion: z.string().regex(/^1\.\d{2}$/), inventoryComplete: z.boolean(), containers: z.array(dockerContainerSchema).max(100) }) }),
       z.object({ status: z.literal('error'), observedAt: timestampSchema, completeness: z.literal('complete'), errorCode: z.enum(['read-failed']) })
+    ]).optional(),
+    tailscale: z.discriminatedUnion('status', [
+      z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.enum(['complete', 'partial']), data: z.object({ version: z.string().min(1).max(128), backendState: z.string().min(1).max(32), selfName: z.string().max(128), selfIPs: z.array(z.ipv4().or(z.ipv6())).max(2), inventoryComplete: z.boolean(), peers: z.array(tailscalePeerSchema).max(250) }) }),
+      z.object({ status: z.literal('error'), observedAt: timestampSchema, completeness: z.literal('complete'), errorCode: z.enum(['read-failed', 'permission-denied', 'invalid-response']) })
     ]).optional()
   })
 }).strict();

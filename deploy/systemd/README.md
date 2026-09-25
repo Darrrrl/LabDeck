@@ -61,6 +61,10 @@ The app needs read access only to the sanitized public directory through the exi
 
 On the actual Ubuntu host, inspect ownership and unit restrictions with `systemctl cat labdeck-smart.service` and `namei -l /var/lib/labdeck-collector/public/smart/snapshot.json`. Compare one fresh sanitized snapshot with the reviewed command on each allowlisted device. Run `LABDECK_LIVE_TEST=true LABDECK_SMART_SNAPSHOT_PATH=/var/lib/labdeck-collector/public/smart/snapshot.json npm run test:live -- --provider=smart`; the live checker reads only the snapshot. Exercise a sleeping disk and unsupported bridge if available. Do not call fixture tests hardware evidence.
 
+## Optional Tailscale status
+
+Review the [local-status compatibility guide](../../docs/integrations/tailscale.md), including the unprivileged user's access to `/usr/bin/tailscale status --json`, before setting `"tailscale": true` in the root-owned collector configuration. Restart only the ordinary collector. The app needs no new mount, socket, group, token or privilege; the existing sanitized host snapshot carries the optional peer capability. If the CLI is inaccessible, leave the module disabled or report permission-denied after a reviewed minimal access change. Do not grant Tailscale operator controls merely for observation. The opt-in live checker reads the sanitized snapshot, not the CLI or daemon.
+
 Validate values over the same interval with `free -b`, `df -B1`, `/proc/uptime`, `/proc/net/dev`, and `/proc/diskstats`. Memory definitions differ between tools: LabDeck uses `MemTotal - MemAvailable`. Filesystem used space is `total - free`, available is the unprivileged allocation amount, and reserved is `free - available`. Network and block-I/O rates are unknown for the first sample and after counter resets.
 
 After reviewing the installed configuration, run the read-only live check on Ubuntu:

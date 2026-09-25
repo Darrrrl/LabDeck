@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
-import type { ContainersResponse, DownloadsResponse, EventsResponse, HostCollectorSnapshot, IndexerHealthResponse, MediaResponse, MediaSession, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import type { ContainersResponse, DownloadsResponse, EventsResponse, HostCollectorSnapshot, IndexerHealthResponse, MediaResponse, MediaSession, NetworkResponse, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import { persistenceDiagnostics } from '../db/persistence.js';
 
 type Capability = HostCollectorSnapshot['capabilities'][keyof HostCollectorSnapshot['capabilities']];
 type SummaryCapability = HostCollectorSnapshot['capabilities']['summary'];
@@ -10,6 +11,7 @@ type IntegrationRow = { connection: 'unknown' | 'reachable' | 'unreachable' | 'a
 type CapabilityRow = { observed_at: number; normalized_json: string };
 type MetricRow = { bucket_start: number; count: number; expected_count: number; sum: number; last: number };
 type PollRow = { attempted_at: number | null; last_success_at: number | null; safe_error_code: string | null };
+export type HistoryRange = '1h' | '24h' | '7d' | '30d' | '400d';
 type MediaCapability = { observedAt: string; data: { sessions: MediaSession[] } };
 type LibraryCapability = { observedAt: string; data: { counts: { movies: number; series: number; episodes: number }; recent: { id: string; name: string; type: 'movie' | 'series' | 'episode' | 'other'; seriesName: string | null; addedAt: string | null }[] } };
 interface MediaConfig { id: string; name: string; browserUrl: string }
@@ -55,10 +57,11 @@ export class HostQueries {
     const indexers = this.indexers();
     const containers = this.containers();
     const disks = this.smart();
+    const tailscale = this.network();
     const serviceProblem = [media?.connection, ...downloads.map((item) => item.connection), indexers?.connection].some((connection) => connection === 'auth-error' || connection === 'unreachable');
     const indexerProblem = !!indexers && indexers.freshness === 'fresh' && ((indexers.failingTotal ?? 0) > 0 || indexers.warnings.some((item) => item.severity === 'warning' || item.severity === 'error'));
     const containerProblem = containers.configured && containers.freshness === 'fresh' && ((containers.unhealthy ?? 0) > 0 || (containers.expectedStopped ?? 0) > 0);
-    const overall = disks.configured && disks.freshness === 'fresh' && disks.failed > 0 ? 'critical' : storageStatus === 'critical' ? 'critical' : storageStatus === 'warning' || integration?.connection === 'unreachable' || serviceProblem || indexerProblem || containerProblem || disks.configured && disks.freshness === 'fresh' && disks.warning > 0 ? 'warning' : (!this.configured || currentFreshness === 'fresh') && (!media || media.freshness === 'fresh') && (!indexers || indexers.freshness === 'fresh' && indexers.connection === 'reachable') && (!containers.configured || containers.freshness === 'fresh') && (!disks.configured || disks.freshness === 'fresh') ? 'healthy' : 'monitoring-incomplete';
+    const overall = disks.configured && disks.freshness === 'fresh' && disks.failed > 0 ? 'critical' : storageStatus === 'critical' ? 'critical' : storageStatus === 'warning' || integration?.connection === 'unreachable' || serviceProblem || indexerProblem || containerProblem || disks.configured && disks.freshness === 'fresh' && disks.warning > 0 || tailscale.configured && (tailscale.errorCode !== null || tailscale.freshness === 'fresh' && tailscale.backendState !== 'Running') ? 'warning' : (!this.configured || currentFreshness === 'fresh') && (!media || media.freshness === 'fresh') && (!indexers || indexers.freshness === 'fresh' && indexers.connection === 'reachable') && (!containers.configured || containers.freshness === 'fresh') && (!disks.configured || disks.freshness === 'fresh') && (!tailscale.configured || tailscale.freshness === 'fresh') ? 'healthy' : 'monitoring-incomplete';
     const title = overall === 'healthy' ? 'All observed systems healthy' : overall === 'critical' ? disks.freshness === 'fresh' && disks.failed > 0 ? 'Critical disk health evidence' : 'Critical storage pressure' : overall === 'warning' ? 'Needs attention' : 'Monitoring incomplete';
     const message = disks.configured && disks.freshness === 'fresh' && disks.failed > 0 ? 'A physical disk reports SMART failure evidence.'
       : media?.connection === 'auth-error' ? 'Jellyfin rejected its configured credentials. Host observations remain available.'
@@ -69,10 +72,13 @@ export class HostQueries {
       : indexers?.connection === 'unreachable' ? 'Prowlarr is unreachable. Showing its last successful observation.'
       : indexerProblem ? 'Prowlarr reports indexer or service health issues.'
       : containerProblem ? 'A container healthcheck failed or an expected container is not running.'
+      : tailscale.configured && tailscale.errorCode ? `Tailscale local status read failed (${tailscale.errorCode}); showing last-good peers.`
+      : tailscale.configured && tailscale.freshness === 'fresh' && tailscale.backendState !== 'Running' ? 'The local Tailscale client is not running.'
       : disks.configured && disks.freshness === 'fresh' && disks.warning > 0 ? 'A physical disk reports a SMART warning.'
       : disks.configured && disks.freshness !== 'fresh' ? 'SMART evidence is missing or stale.'
       : indexers && indexers.freshness !== 'fresh' ? 'Prowlarr health evidence is missing or stale.'
       : containers.configured && containers.freshness !== 'fresh' ? 'Docker observation is missing or stale.'
+      : tailscale.configured && tailscale.freshness !== 'fresh' ? 'Tailscale observation is missing or stale.'
       : integration?.connection === 'unreachable'
       ? 'The host collector cannot be read. Showing the last successful observation.'
       : currentFreshness === 'stale' ? 'Host data is stale. Check the collector service and snapshot mount.'
@@ -87,11 +93,12 @@ export class HostQueries {
       diskIo: blockIo?.status === 'ok' ? blockIo.data[0] ?? null : null,
       media, downloads, indexers, containers: containers.configured ? { configured: true, freshness: containers.freshness, observedAt: containers.observedAt, errorCode: containers.errorCode, inventoryComplete: containers.inventoryComplete, total: containers.total, running: containers.running, unhealthy: containers.unhealthy, expectedStopped: containers.expectedStopped } : null,
       disks: disks.configured ? { configured: true, freshness: disks.freshness, observedAt: disks.observedAt, errorCode: disks.errorCode, failed: disks.failed, warning: disks.warning, unavailable: disks.unavailable } : null,
+      tailscale: tailscale.configured ? { configured: true, freshness: tailscale.freshness, observedAt: tailscale.observedAt, errorCode: tailscale.errorCode, backendState: tailscale.backendState, inventoryComplete: tailscale.inventoryComplete, total: tailscale.total, online: tailscale.online } : null,
       events: this.events(5).events
     };
   }
 
-  system(range: '1h' | '24h'): SystemResponse {
+  system(range: HistoryRange): SystemResponse {
     const row = this.capability('host.summary');
     const summary = parseCapability<SummaryCapability>(row);
     const interfaces = parseCapability<InterfacesCapability>(this.capability('host.interfaces'));
@@ -104,7 +111,7 @@ export class HostQueries {
     };
   }
 
-  storage(range: '1h' | '24h'): StorageResponse {
+  storage(range: HistoryRange): StorageResponse {
     const row = this.capability('host.filesystems');
     const capability = parseCapability<FilesystemsCapability>(row);
     const filesystems = capability?.status === 'ok' ? capability.data.map((filesystem) => ({
@@ -171,6 +178,17 @@ export class HostQueries {
       expectedStopped: observed ? containers.filter((item) => item.expectedRunning && item.state !== 'running').length : null, containers };
   }
 
+  network(): NetworkResponse {
+    const row = this.capabilityFor('host', 'network.peers');
+    const observed = parseJson<{ data: Pick<NetworkResponse, 'version' | 'backendState' | 'selfName' | 'selfIPs' | 'inventoryComplete' | 'peers'> }>(row?.normalized_json);
+    const poll = this.poll('host', 'tailscale');
+    const peers = observed?.data.peers ?? [];
+    return { configured: !!row || !!poll, freshness: freshnessWith(row?.observed_at ?? null, this.now(), 90_000), observedAt: iso(row?.observed_at ?? null), errorCode: poll?.safe_error_code ?? null,
+      backendState: observed?.data.backendState ?? null, inventoryComplete: observed?.data.inventoryComplete ?? null,
+      total: observed?.data.inventoryComplete ? peers.length : null, online: observed ? peers.filter((peer) => peer.online).length : null,
+      version: observed?.data.version ?? null, selfName: observed?.data.selfName ?? null, selfIPs: observed?.data.selfIPs ?? [], peers };
+  }
+
   indexers(): IndexerHealthResponse | null {
     if (!this.indexerConfig) return null;
     const row = this.capabilityFor('prowlarr', 'indexers.health');
@@ -192,25 +210,35 @@ export class HostQueries {
         ,...this.downloadConfigs.map((config) => { const integrationState = this.integrationFor(config.id); const queue = this.capabilityFor(config.id, 'downloads.queue'); return { id: config.id, name: config.name, connection: integrationState?.connection ?? 'unknown' as const, freshness: freshnessWith(queue?.observed_at ?? null, this.now(), 45_000), lastSuccessfulRefreshAt: iso(integrationState?.succeeded_at ?? null), safeErrorCode: integrationState?.safe_error_code ?? null }; }),
         ...(this.indexerConfig ? [{ id: 'prowlarr', name: 'Prowlarr', connection: this.integrationFor('prowlarr')?.connection ?? 'unknown' as const, freshness: this.indexers()?.freshness ?? 'never' as const, lastSuccessfulRefreshAt: iso(this.integrationFor('prowlarr')?.succeeded_at ?? null), safeErrorCode: this.integrationFor('prowlarr')?.safe_error_code ?? null }] : [])
         ,...(this.smartConfigured ? [{ id: 'smart', name: 'Physical disks', connection: this.poll('smart', 'snapshot')?.safe_error_code ? 'unreachable' as const : this.integrationFor('smart')?.connection ?? 'unknown' as const, freshness: this.smart().freshness, lastSuccessfulRefreshAt: iso(this.integrationFor('smart')?.succeeded_at ?? null), safeErrorCode: this.poll('smart', 'snapshot')?.safe_error_code ?? null }] : [])
+        ,...(this.network().configured ? [{ id: 'tailscale', name: 'Tailscale', connection: this.network().errorCode ? 'unreachable' as const : 'reachable' as const, freshness: this.network().freshness, lastSuccessfulRefreshAt: this.network().observedAt, safeErrorCode: this.network().errorCode }] : [])
       ],
       authentication: 'configured' as const, demoMode, version: '0.2.0',
-      hostCollector: { configured: this.configured, historyAvailable: this.historyAvailable(), message: this.configured ? 'Reading the configured snapshot file. The application has no host command or privilege path.' : 'Set LABDECK_HOST_SNAPSHOT_PATH and mount the collector public directory read-only.' }
+      hostCollector: { configured: this.configured, historyAvailable: this.historyAvailable(), message: this.configured ? 'Reading the configured snapshot file. The application has no host command or privilege path.' : 'Set LABDECK_HOST_SNAPSHOT_PATH and mount the collector public directory read-only.' },
+      persistence: persistenceDiagnostics(this.database)
     };
   }
 
-  #metricRows(name: string, range: '1h' | '24h', entityId?: string): MetricRow[] {
-    const resolution = range === '1h' ? '1m' : '15m';
-    const since = this.now() - (range === '1h' ? 60 * 60_000 : 24 * 60 * 60_000);
+  #metricRows(name: string, range: HistoryRange, entityId?: string, instanceId = 'host'): MetricRow[] {
+    const resolution = range === '1h' ? '1m' : range === '24h' ? '15m' : '1h';
+    const durations: Record<HistoryRange, number> = { '1h': 60 * 60_000, '24h': 24 * 60 * 60_000, '7d': 7 * 24 * 60 * 60_000, '30d': 30 * 24 * 60 * 60_000, '400d': 400 * 24 * 60 * 60_000 };
+    const since = this.now() - durations[range];
     return this.database.prepare(`SELECT b.bucket_start, b.count, b.expected_count, b.sum, b.last FROM metric_buckets b
       JOIN metric_series s ON s.series_id = b.series_id
-      WHERE s.instance_id = 'host' AND s.metric_name = ? AND (? IS NULL OR s.entity_id = ?)
-      AND b.resolution = ? AND b.bucket_start >= ? ORDER BY b.bucket_start`).all(name, entityId ?? null, entityId ?? null, resolution, since) as MetricRow[];
+      WHERE s.instance_id = ? AND s.metric_name = ? AND (? IS NULL OR s.entity_id = ?)
+      AND b.resolution = ? AND b.bucket_start >= ? ORDER BY b.bucket_start LIMIT 10000`).all(instanceId, name, entityId ?? null, entityId ?? null, resolution, since) as MetricRow[];
   }
 
-  metric(name: string, range: '1h' | '24h', entityId?: string) {
-    return this.#metricRows(name, range, entityId).map((row) => ({
+  metric(name: string, range: HistoryRange, entityId?: string, instanceId = 'host') {
+    const rows = this.#metricRows(name, range, entityId, instanceId);
+    const buckets = new Map<number, MetricRow>();
+    for (const row of rows) {
+      const start = range === '400d' ? Math.floor(row.bucket_start / 86_400_000) * 86_400_000 : row.bucket_start;
+      const previous = buckets.get(start);
+      buckets.set(start, previous ? { bucket_start: start, count: previous.count + row.count, expected_count: previous.expected_count + row.expected_count, sum: previous.sum + row.sum, last: row.last } : row);
+    }
+    return [...buckets.values()].slice(-1000).map((row) => ({
       at: new Date(row.bucket_start).toISOString(), value: name === 'cpu.utilization' ? row.sum / row.count : row.last,
-      coverage: Math.min(1, row.count / row.expected_count)
+      coverage: Math.min(1, row.count / (range === '400d' ? Math.max(row.expected_count, (rows[0]?.expected_count ?? 0) * 24) : row.expected_count))
     }));
   }
 

@@ -48,6 +48,8 @@ Provider contexts receive narrow dependencies, not DB handles or an unrestricted
 
 M6 Docker snapshots contain only a bounded, projected inventory and nullable per-container stats with their own observation timestamps; a partial inventory cannot prove removal. M7 SMART snapshots are a separate versioned, atomic file produced by a root one-shot timer. The app reads that sanitized file only; it has no raw-device path or helper command channel. Disk state is `ok | asleep | unsupported | permission-denied | timeout | read-failed`, independent from SMART health `passed | warning | failed | unknown`. A non-`ok` read preserves prior measurements and their original evidence timestamp while reporting the current state/time. Physical-disk capacity is never added to filesystem capacity. Counters that may exceed JavaScript's safe integer range are decimal strings; missing is unknown, not zero. See [hardware gate](smart-hardware.md).
 
+M8 Tailscale status is an optional, fixed local CLI read in the ordinary collector. It projects only safe local status and at most 250 locally known peers; absent LastSeen remains null and reported Online is not a reachability probe. A partial list cannot erase a complete cached inventory. The app has neither a Tailscale socket nor a command path. See [compatibility gate](tailscale.md).
+
 ## State and freshness
 
 Persist `lastAttemptAt`, `lastSuccessAt` and `lastErrorCode` per poll group, plus last good observation time per capability. Public fields include `observedAt`, `lastSuccessfulRefreshAt`, `nextExpectedAt`, and derived freshness (`fresh | stale | never`). A fresh file read does not refresh old collector data; use the collector's sample timestamp.

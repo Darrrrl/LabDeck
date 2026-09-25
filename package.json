@@ -26,6 +26,8 @@
     "test:live": "node scripts/live-check.mjs",
     "test:e2e": "npm run build && playwright test",
     "test:security": "npm run build && node scripts/security-check.mjs",
+    "test:resilience": "vitest run --project=persistence",
+    "db:maintenance": "node apps/server/dist/db/maintenance-cli.js",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

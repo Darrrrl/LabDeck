@@ -18,6 +18,7 @@ import (
 	"github.com/labdeck/labdeck/collector/internal/smart"
 	"github.com/labdeck/labdeck/collector/internal/snapshots"
 	"github.com/labdeck/labdeck/collector/internal/system"
+	"github.com/labdeck/labdeck/collector/internal/tailscale"
 )
 
 const version = "0.1.0"
@@ -70,6 +71,8 @@ func main() {
 	var dockerCollector *docker.Collector
 	var dockerCapability *snapshots.Capability[snapshots.DockerInventory]
 	var lastDocker time.Time
+	var tailscaleCapability *snapshots.Capability[snapshots.TailscaleStatus]
+	var lastTailscale time.Time
 	if value.Docker {
 		dockerCollector = docker.New()
 	}
@@ -90,6 +93,14 @@ func main() {
 				}
 			}
 			capabilities.Docker = dockerCapability
+		}
+		if value.Tailscale {
+			if tailscaleCapability == nil || now.Sub(lastTailscale) >= 30*time.Second {
+				lastTailscale = now
+				observed := tailscale.Collect(now)
+				tailscaleCapability = &observed
+			}
+			capabilities.Tailscale = tailscaleCapability
 		}
 		snapshot := snapshots.Snapshot{SchemaVersion: snapshots.SchemaVersion, CollectorVersion: version, HostID: value.HostID, BootID: strings.TrimSpace(string(bootID)), Generation: generation, Sequence: sequence, GeneratedAt: now, Capabilities: capabilities}
 		if err := snapshots.WriteAtomic(value.OutputDirectory, snapshot); err != nil {

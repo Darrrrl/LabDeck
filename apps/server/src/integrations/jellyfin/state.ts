@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { persistEvent, retainEvents } from '../../core/events.js';
+import { persistMetrics } from '../../core/metrics.js';
 import { SafeTransportError } from '../../core/read-only-transport.js';
 import type { LibraryObservation, PlaybackObservation } from './adapter.js';
 
@@ -18,6 +19,15 @@ export class JellyfinStateStore {
         this.database.prepare(`INSERT INTO capability_state(instance_id, capability, schema_version, observed_at, succeeded_at, normalized_json)
           VALUES (?, ?, '1', ?, ?, ?) ON CONFLICT(instance_id, capability) DO UPDATE SET observed_at=excluded.observed_at,
           succeeded_at=excluded.succeeded_at, normalized_json=excluded.normalized_json`).run(INSTANCE, capability, Date.parse(observation.observedAt), now, JSON.stringify(observation));
+        if (group === 'library') {
+          const library = observation as LibraryObservation;
+          const at = Date.parse(library.observedAt);
+          persistMetrics(this.database, [
+            { instanceId: INSTANCE, entityId: INSTANCE, name: 'library.movies', unit: 'count', value: library.data.counts.movies, observedAt: at, sampleIntervalMs: 300_000 },
+            { instanceId: INSTANCE, entityId: INSTANCE, name: 'library.series', unit: 'count', value: library.data.counts.series, observedAt: at, sampleIntervalMs: 300_000 },
+            { instanceId: INSTANCE, entityId: INSTANCE, name: 'library.episodes', unit: 'count', value: library.data.counts.episodes, observedAt: at, sampleIntervalMs: 300_000 }
+          ], now);
+        }
       }
       this.database.prepare(`INSERT INTO poll_state(instance_id, group_id, last_success_at, attempted_at, safe_error_code, cursor_json)
         VALUES (?, ?, ?, ?, NULL, ?) ON CONFLICT(instance_id, group_id) DO UPDATE SET last_success_at=excluded.last_success_at,
