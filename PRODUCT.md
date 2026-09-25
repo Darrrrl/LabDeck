@@ -57,3 +57,9 @@ No restart/start/stop, shell, logs viewer, SMART self-tests, media management, s
 - A single person can install, upgrade, restore, and understand the architecture using repository documentation.
 
 See [experience details](docs/product/experience.md) for page hierarchy and state design.
+
+## Requested monitoring add-ons (2026-09-25)
+
+A dedicated `/wallboard` presents six bounded summary widgets for a server display, with fullscreen and detail links. The no-scroll target is a desktop viewport of at least 1280×720 at normal zoom; smaller screens reflow with scrolling for readability. Docker adds local name/image search and state/attention filters, separate state and healthcheck labels, and explicit running expectations.
+
+Storage adds ATA self-test evidence and a host smartd schedule preview. The exclusion of app-initiated self-tests remains: test initiation and schedule activation occur on the host. See [decision 004](docs/decisions/004-host-owned-smart-tests.md) and [setup](docs/operations/smart-tests.md).

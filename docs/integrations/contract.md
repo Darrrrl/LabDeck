@@ -97,3 +97,7 @@ Keep a separate dedupe/cursor baseline long enough that event retention cannot c
 ## Adding an integration
 
 Implement a typed payload, sanitized fixtures and adapter; register its groups and safe transport routes; add summary/detail selectors and UI; add failure/partial tests and compatibility evidence. Reuse core health/history/auth rather than adding integration-specific versions. Do not require every provider to supply every capability.
+
+### Optional ATA self-test evidence
+
+`host.disks` and the SMART snapshot can include nullable/omitted `selfTest`: state (`unknown | idle | running`), nullable 0–100 integer remaining percentage, nullable short/extended minute estimates, and up to five newest-first test entries. Entries contain only normalized type, result (`passed | failed | aborted | interrupted | running | unknown`) and nullable lifetime hours. Arbitrary vendor result text is discarded. Missing fields preserve compatibility with older collectors. The disk evidence timestamp applies to all test fields; failed/asleep reads retain the original evidence. There is no calendar completion time, schedule-installed claim or control route.

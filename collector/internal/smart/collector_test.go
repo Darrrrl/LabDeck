@@ -83,3 +83,24 @@ func TestStandbyUnsupportedPermissionAndMalformed(t *testing.T) {
 		t.Fatal("unapproved device accepted")
 	}
 }
+
+func TestSelfTestProgressResultsAndBounds(t *testing.T) {
+	raw := []byte(`{"device":{"protocol":"ATA"},"ata_smart_data":{"self_test":{"status":{"value":249,"remaining_percent":90},"polling_minutes":{"short":2,"extended":600}}},"ata_smart_self_test_log":{"standard":{"table":[{"type":{"value":2},"status":{"value":112,"string":"SECRET_CANARY"},"lifetime_hours":300},{"type":{"value":1},"status":{"value":0},"lifetime_hours":200},{"status":{"value":16}},{"status":{"value":32}},{"status":{"value":240}},{"status":{"value":0}}]}}}`)
+	result := Normalize(raw, 0, selected(), time.Now().UTC())
+	test := result.SelfTest
+	if test == nil || test.State != "running" || test.RemainingPercent == nil || *test.RemainingPercent != 90 || len(test.History) != 5 || test.History[0].Result != "failed" || test.History[1].Result != "passed" || test.History[2].Result != "aborted" || test.History[3].Result != "interrupted" || test.History[4].Result != "running" {
+		t.Fatalf("bad self-test projection: %#v", test)
+	}
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "SECRET_CANARY") {
+		t.Fatal("vendor text leaked")
+	}
+	unknown := Normalize([]byte(`{"device":{"protocol":"ATA"},"ata_smart_data":{"self_test":{"status":{"value":999,"remaining_percent":110}}}}`), 0, selected(), time.Now().UTC())
+	if unknown.SelfTest.State != "unknown" || unknown.SelfTest.RemainingPercent != nil {
+		t.Fatal("invalid status made progress")
+	}
+	absent := Normalize([]byte(`{"device":{"protocol":"ATA"}}`), 0, selected(), time.Now().UTC())
+	if absent.SelfTest != nil {
+		t.Fatal("missing test evidence invented")
+	}
+}

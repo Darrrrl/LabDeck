@@ -30,6 +30,11 @@ const smartDiskSchema = z.object({
   observedAt: timestampSchema, evidenceAt: timestampSchema.nullable(), temperatureWarning: z.boolean(), identity: z.string(), serialSuffix: z.string(),
   protocol: z.enum(['ATA', 'NVME', 'SCSI', 'unknown']), model: z.string(), capacityBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
   temperatureCelsius: z.number().nullable(), health: z.enum(['passed', 'warning', 'failed', 'unknown']), powerOnHours: z.number().int().nonnegative().nullable(),
+  selfTest: z.object({
+    state: z.enum(['unknown', 'idle', 'running']), remainingPercent: z.number().int().min(0).max(100).nullable(),
+    shortMinutes: z.number().int().nonnegative().nullable(), extendedMinutes: z.number().int().nonnegative().nullable(),
+    history: z.array(z.object({ type: z.enum(['short', 'extended', 'other']), result: z.enum(['passed', 'failed', 'aborted', 'interrupted', 'running', 'unknown']), lifetimeHours: z.number().int().nonnegative().nullable() })).max(5)
+  }).nullable().optional(),
   ata: z.object({ reallocated: smartCounterSchema, pending: smartCounterSchema, uncorrectable: smartCounterSchema }).nullable(),
   nvme: z.object({ criticalWarning: z.number().int().nonnegative().nullable(), availableSparePercent: z.number().int().nonnegative().nullable(), percentageUsed: z.number().int().nonnegative().nullable(), mediaErrors: smartCounterSchema, errorLogEntries: smartCounterSchema }).nullable(),
   scsi: z.object({ grownDefects: smartCounterSchema, readUncorrected: smartCounterSchema }).nullable()

@@ -12,12 +12,13 @@ export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () 
     }
   }, [pathname]);
   return (
-    <div className="app-shell">
+    <div className={`app-shell${pathname === '/wallboard' ? ' app-shell--wallboard' : ''}`}>
       {demoMode ? <div className="demo-banner" role="status">Fixture demo mode · loopback access only</div> : null}
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark" aria-hidden="true"><Activity size={18} /></span><span>LabDeck</span></div>
         <nav aria-label="Primary navigation">
           <NavLink to="/" end><LayoutDashboard aria-hidden="true" size={17} /><span>Overview</span></NavLink>
+          <NavLink to="/wallboard"><MonitorCog aria-hidden="true" size={17} /><span>Wallboard</span></NavLink>
           <NavLink to="/system"><MonitorCog aria-hidden="true" size={17} /><span>System</span></NavLink>
           <NavLink to="/storage"><Database aria-hidden="true" size={17} /><span>Storage</span></NavLink>
           <NavLink to="/media"><Clapperboard aria-hidden="true" size={17} /><span>Media</span></NavLink>

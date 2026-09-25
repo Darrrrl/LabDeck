@@ -226,3 +226,11 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 ## After v1 (uncommitted)
 
 Consider storage forecast, optional Prowlarr statistics, safe artwork caching, per-library byte attribution, webhook/event completeness and Compose grouping only after usage feedback. Logs/control actions, multi-host collection and external alerts each require a new scope/security decision. No tasks or placeholders for these belong in the initial implementation.
+
+## Requested add-ons — server display, Docker clarity, SMART test evidence
+
+**Status:** Implementation complete for wallboard, Docker search/filters and ATA self-test evidence. Host schedule activation and real-device validation remain pending; see [add-on validation](docs/plans/addons-validation-report.md).
+
+**Acceptance:** Six bounded wallboard widgets with fullscreen and detail navigation; desktop no-scroll target 1280×720; Docker search and attention/state filters retain optional-stop semantics; SMART progress/results preserve original evidence time; host-owned schedule preview clearly says it is not installed. No app infrastructure control route or new privileges.
+
+**Remaining:** Activate reviewed smartd schedules on Ubuntu, validate actual ATA hardware and installed smartmontools behavior. NVMe/SCSI self-test projection and in-app test initiation/schedule activation are outside this delivered slice.

@@ -13,6 +13,16 @@ function advance(value: SmartSnapshot, minutes: number) { const next = structure
 const query = (database: ReturnType<typeof openDatabase>, now: number) => new HostQueries(database, false, () => true, () => now, undefined, [], undefined, new Set(), true).smart();
 
 describe('SMART snapshot state', () => {
+  it('retains self-test progress with the original evidence time after a sleeping read', () => {
+    const database = openDatabase(':memory:'); const state = new SmartStateStore(database); const first = fixture();
+    first.disks[0]!.selfTest = { state: 'running', remainingPercent: 80, shortMinutes: 2, extendedMinutes: 600, history: [{ type: 'extended', result: 'failed', lifetimeHours: 400 }] };
+    const at = Date.parse(first.generatedAt); state.ingest(first, at);
+    const asleep = advance(first, 10); asleep.disks[0]!.state = 'asleep'; asleep.disks[0]!.selfTest = null; state.ingest(asleep, at + 600_000);
+    expect(query(database, at + 600_000).disks[0]).toMatchObject({ evidenceAt: first.generatedAt, selfTest: first.disks[0]!.selfTest });
+    const invalid = structuredClone(first); invalid.disks[0]!.selfTest!.remainingPercent = 101;
+    expect(smartSnapshotSchema.safeParse(invalid).success).toBe(false);
+    database.close();
+  });
   it('retains original evidence time while asleep or unreadable', () => {
     const database = openDatabase(':memory:'); const state = new SmartStateStore(database); const first = fixture(); const at = Date.parse(first.generatedAt); state.ingest(first, at);
     const asleep = advance(first, 10); asleep.disks[0] = { ...asleep.disks[0]!, state: 'asleep', identity: '', serialSuffix: '', protocol: 'unknown', model: '', capacityBytes: null, temperatureCelsius: null, health: 'unknown', powerOnHours: null, ata: null, nvme: null, scsi: null };

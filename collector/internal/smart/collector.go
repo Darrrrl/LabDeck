@@ -174,6 +174,7 @@ func Normalize(output []byte, exitStatus int, selected config.SmartDisk, observe
 	}
 	switch protocol {
 	case "ATA":
+		result.SelfTest = selfTests(raw)
 		attributes := valueAt(raw, "ata_smart_attributes", "table")
 		result.ATA = &snapshots.SmartATA{Reallocated: attribute(attributes, 5), Pending: attribute(attributes, 197), Uncorrectable: attribute(attributes, 198)}
 		if positive(result.ATA.Pending) || positive(result.ATA.Uncorrectable) {
@@ -309,4 +310,57 @@ func hasPermissionMessage(raw map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// ATA status codes are projected to fixed labels; vendor strings never leave the helper.
+func selfTests(raw map[string]any) *snapshots.SmartSelfTest {
+	status := safeUint(valueAt(raw, "ata_smart_data", "self_test", "status", "value"))
+	log := valueAt(raw, "ata_smart_self_test_log", "standard")
+	if status == nil && log == nil {
+		return nil
+	}
+	result := &snapshots.SmartSelfTest{State: "unknown", History: []snapshots.SmartTestResult{},
+		ShortMinutes:    safeUint(valueAt(raw, "ata_smart_data", "self_test", "polling_minutes", "short")),
+		ExtendedMinutes: safeUint(valueAt(raw, "ata_smart_data", "self_test", "polling_minutes", "extended"))}
+	if status != nil && *status <= 255 {
+		result.State = "idle"
+		if *status>>4 == 15 {
+			result.State = "running"
+			remaining := safeUint(valueAt(raw, "ata_smart_data", "self_test", "status", "remaining_percent"))
+			if remaining != nil && *remaining <= 100 {
+				result.RemainingPercent = remaining
+			}
+		}
+	}
+	rows, _ := valueAt(log, "table").([]any)
+	for _, row := range rows {
+		if len(result.History) == 5 {
+			break
+		}
+		entry := snapshots.SmartTestResult{Type: "other", Result: "unknown", LifetimeHours: safeUint(valueAt(row, "lifetime_hours"))}
+		if kind := safeUint(valueAt(row, "type", "value")); kind != nil {
+			switch *kind {
+			case 1, 129:
+				entry.Type = "short"
+			case 2, 130:
+				entry.Type = "extended"
+			}
+		}
+		if code := safeUint(valueAt(row, "status", "value")); code != nil && *code <= 255 {
+			switch *code >> 4 {
+			case 0:
+				entry.Result = "passed"
+			case 1:
+				entry.Result = "aborted"
+			case 2:
+				entry.Result = "interrupted"
+			case 3, 4, 5, 6, 7, 8:
+				entry.Result = "failed"
+			case 15:
+				entry.Result = "running"
+			}
+		}
+		result.History = append(result.History, entry)
+	}
+	return result
 }

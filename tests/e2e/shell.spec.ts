@@ -1,3 +1,4 @@
+import { overviewResponseSchema } from '@labdeck/contracts';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -105,7 +106,7 @@ test('storage selects a filesystem and separates stale disk evidence on a phone'
   const observedAt = new Date().toISOString();
   const earlier = new Date(Date.now() - 60 * 60_000).toISOString();
   const filesystem = (id: string, path: string) => ({ id, path, source: '/dev/synthetic', fsType: 'ext4', totalBytes: 1_000_000_000_000, usedBytes: 600_000_000_000, availableBytes: 390_000_000_000, reservedBytes: 10_000_000_000, usedRatio: .6 });
-  await page.route('**/api/v1/storage**', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, freshness: 'fresh', observedAt, filesystems: [filesystem('root', '/'), filesystem('media', '/srv/media')], history: { root: [], media: [] }, smart: { configured: true, freshness: 'fresh', observedAt, errorCode: null, failed: 0, warning: 0, unavailable: 1, disks: [{ id: 'array-a', label: 'Array disk A', state: 'asleep', observedAt, evidenceAt: earlier, temperatureWarning: false, identity: 'abc', serialSuffix: '1234', protocol: 'ATA', model: 'Example HDD', capacityBytes: 2_000_000_000_000, temperatureCelsius: 34, health: 'passed', powerOnHours: 1000, ata: { reallocated: '0', pending: '0', uncorrectable: '0' }, nvme: null, scsi: null }] } }) }));
+  await page.route('**/api/v1/storage**', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, freshness: 'fresh', observedAt, filesystems: [filesystem('root', '/'), filesystem('media', '/srv/media')], history: { root: [], media: [] }, smart: { configured: true, freshness: 'fresh', observedAt, errorCode: null, failed: 0, warning: 0, unavailable: 1, disks: [{ id: 'array-a', label: 'Array disk A', state: 'asleep', observedAt, evidenceAt: earlier, temperatureWarning: false, identity: 'abc', serialSuffix: '1234', protocol: 'ATA', model: 'Example HDD', capacityBytes: 2_000_000_000_000, temperatureCelsius: 34, health: 'passed', powerOnHours: 1000, selfTest: { state: 'running', remainingPercent: 80, shortMinutes: 2, extendedMinutes: 600, history: [{ type: 'extended', result: 'failed', lifetimeHours: 900 }] }, ata: { reallocated: '0', pending: '0', uncorrectable: '0' }, nvme: null, scsi: null }] } }) }));
   await signIn(page);
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Storage' }).click();
   await expect(page.getByRole('heading', { name: 'Storage' })).toBeVisible();
@@ -113,8 +114,10 @@ test('storage selects a filesystem and separates stale disk evidence on a phone'
   await expect(page.getByText('/srv/media · /dev/synthetic')).toBeVisible();
   await expect(page.getByText('Array disk A')).toBeVisible();
   await expect(page.getByText('asleep')).toBeVisible();
-  await expect(page.getByText(/health evidence/)).toBeVisible();
+  await expect(page.getByText(/Status observed .*health evidence/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expect(page.getByText('Test in progress', { exact: true })).toBeVisible();
+  await expect(page.getByText('extended · failed', { exact: true })).toBeVisible();
   await expectAccessible(page);
 });
 
@@ -199,6 +202,12 @@ test('containers show a 50-item mixed inventory and read-only detail without pho
   await expect(page.locator('details[open]').getByText('Working set (cache excluded)')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectAccessible(page);
+  await page.getByLabel('Show', { exact: true }).selectOption('attention');
+  await expect(page.locator('.container-row')).toHaveCount(2);
+  await page.getByLabel('Search containers').fill('service-0');
+  await expect(page.locator('.container-row')).toHaveCount(1);
+  await page.getByLabel('Search containers').fill('no-such-container');
+  await expect(page.getByText('No containers match these filters.')).toBeVisible();
 });
 
 test('network shows local peers, unknown last-seen and stale evidence on a phone', async ({ page }) => {
@@ -215,4 +224,40 @@ test('network shows local peers, unknown last-seen and stale evidence on a phone
   await expect(page.getByText(/Local status read failed \(permission-denied\)/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectAccessible(page);
+});
+
+test('wallboard fits a server screen and preserves stale evidence', async ({ page }) => {
+  await page.route('**/api/v1/overview', async (route) => {
+    const response = await route.fetch(); const data = overviewResponseSchema.parse(await response.json());
+    if (!data.configured) throw new Error('Expected configured overview fixture');
+    const observedAt = new Date().toISOString();
+    data.media = { id: 'jellyfin', name: 'Jellyfin', browserUrl: 'https://example.test', connection: 'reachable', freshness: 'fresh', observedAt, lastSuccessfulRefreshAt: observedAt, errorCode: null, sessions: Array.from({ length: 5 }, (_, index) => ({ id: String(index), userName: 'Viewer', title: 'A long movie title on the server screen', subtitle: null, mediaId: String(index), paused: false, positionSeconds: 100, durationSeconds: 600, progressRatio: .16, playbackMode: 'direct-play', bitrateBitsPerSecond: null, bitrateSource: null })) };
+    data.downloads = (['sonarr', 'radarr'] as const).map((id) => ({ id, name: id, browserUrl: 'https://example.test', connection: 'reachable', freshness: 'stale', observedAt, errorCode: 'timeout', healthWarnings: [], queue: [], queueTotal: 4, queueTruncated: false, catalog: null, recentImports: [] }));
+    data.containers = { configured: true, freshness: 'fresh', observedAt, errorCode: null, inventoryComplete: false, total: 50, running: 40, unhealthy: 1, expectedStopped: 2 };
+    data.disks = { configured: true, freshness: 'stale', observedAt, errorCode: null, failed: 1, warning: 2, unavailable: 1 };
+    data.tailscale = { configured: true, freshness: 'fresh', observedAt, errorCode: null, backendState: 'Running', inventoryComplete: false, total: 10, online: 8 };
+    await route.fulfill({ json: data });
+  });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signIn(page);
+  await page.getByRole('link', { name: 'Wallboard', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Docker', exact: true })).toBeVisible();
+  await expect(page.getByText(/Host data is stale/)).toBeVisible();
+  await expect(page.locator('.wallboard-widget')).toHaveCount(6);
+  await expect(page.getByText('+3 more in Media')).toBeVisible();
+  expect(await page.locator('.wallboard-widget').evaluateAll((widgets) => widgets.every((widget) => widget.scrollHeight <= widget.clientHeight))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expectAccessible(page);
+  await page.screenshot({ path: 'test-results/addons-wallboard.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('SMART schedule preview changes without issuing actions', async ({ page }) => {
+  await signIn(page); await page.goto('/storage');
+  await page.getByText('Plan SMART tests', { exact: true }).click();
+  await page.getByLabel('Extended test day').selectOption('6');
+  await page.getByLabel('Start hour').selectOption('04');
+  await expect(page.locator('.schedule-config')).toContainText('L/../../6/04');
+  await expect(page.getByText(/Configuration preview · not installed or active/)).toBeVisible();
 });

@@ -132,3 +132,7 @@ The application container runs non-root with read-only root filesystem, temporar
 Compose installs the app only. Full monitoring also needs a deliberate host systemd installation with reviewed permissions. Offer a documented service-only mode rather than automatically escalating Docker permissions when the collector is unavailable. See [host collector](docs/integrations/host-collector.md) and [security decision](docs/decisions/002-security-and-operations.md).
 
 Out-of-process host collection prevents a compromised web application from asking a privileged helper to run arbitrary commands. It does not make the collector harmless: Docker socket access remains powerful and SMART access remains elevated. Document and audit both.
+
+## SMART self-test evidence add-on
+
+The existing fixed SMART read projects optional ATA test state, remaining percentage, duration estimates and five recent results. No migration or polling change is required. smartd scheduling is operator-managed on the host; the Storage page generates configuration previews only. See [decision 004](docs/decisions/004-host-owned-smart-tests.md).

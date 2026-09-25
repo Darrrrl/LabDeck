@@ -12,6 +12,7 @@ import { NetworkPage } from '../features/network/NetworkPage.js';
 import { deleteSession, getSession } from './api.js';
 import { Login } from './Login.js';
 import { Shell } from './Shell.js';
+import { WallboardPage } from '../features/wallboard/WallboardPage.js';
 
 export function App() {
   const queryClient = useQueryClient();
@@ -24,6 +25,7 @@ export function App() {
     <Routes>
       <Route element={<Shell demoMode={session.data.demoMode} onLogout={async () => { await deleteSession(session.data.csrfToken); queryClient.clear(); }} />}>
         <Route index element={<OverviewPage />} />
+        <Route path="wallboard" element={<WallboardPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="storage" element={<StoragePage />} />
         <Route path="media" element={<MediaPage />} />

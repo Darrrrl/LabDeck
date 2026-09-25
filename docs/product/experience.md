@@ -45,3 +45,11 @@ Show “Estimated full around [date], based on recent growth,” analysis window
 ## UX acceptance
 
 Use realistic synthetic data and a mixed-failure scenario in visual tests. A reader should identify the unhealthy service, primary available storage, active stream and stale source without navigating. Test at 1440×900, 768×1024 and 390×844; keyboard-only and reduced-motion passes are required. Include text/table alternatives for chart values, semantic landmarks and accessible status announcements that do not fire every poll. Target WCAG AA contrast; automated accessibility checks supplement manual focus/readability review.
+
+## Server wallboard and test evidence
+
+Wallboard hides the navigation rail, retains an Overview exit link and offers browser fullscreen. Six bounded widgets summarize System, Storage, Docker, Watching, Downloads and Network. Each observed source shows freshness; watching caps titles at two with a remainder count and a Media link. At 1280×720 and larger desktop displays the default view fits one screen. Mobile and enlarged text can scroll.
+
+Docker search matches name/image and combines with All, Needs attention, Running and Not running filters. Optional stopped containers stay out of Needs attention unless unhealthy. State, healthcheck and running expectations are separate concepts.
+
+Storage separates SMART overall health from self-test results and labels disk lifetime hours explicitly. Schedule previews never appear installed. Follow the [host setup](../operations/smart-tests.md) to activate one.
