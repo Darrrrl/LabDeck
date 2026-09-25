@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 let authenticatedCookies: Awaited<ReturnType<BrowserContext['cookies']>> | undefined;
+async function expectAccessible(page: Page) {
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)).toEqual([]);
+}
 async function signIn(page: Page) {
   if (authenticatedCookies) await page.context().addCookies(authenticatedCookies);
   await page.goto('/');
@@ -24,6 +29,54 @@ test('shell authenticates and supports keyboard navigation', async ({ page }) =>
   await page.getByRole('link', { name: 'Settings' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
+  await expect(page.locator('#main-content')).toBeFocused();
+});
+
+test('history controls expose selection and events failure is distinct from an empty feed', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'System' }).click();
+  const ranges = page.getByRole('group', { name: 'History range' });
+  await expect(ranges.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
+  await ranges.getByRole('button', { name: '24h' }).click();
+  await expect(ranges.getByRole('button', { name: '24h' })).toHaveAttribute('aria-pressed', 'true');
+  await page.route('**/api/v1/events?**', async (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Events' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Cached events are unavailable.');
+  await expect(page.getByText('No noteworthy transitions yet.')).toHaveCount(0);
+});
+
+test('cached detail failures do not remain in loading or empty states', async ({ page }) => {
+  await page.route('**/api/v1/system?**', async (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/v1/storage?**', async (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/v1/network', async (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await signIn(page);
+  for (const [path, message] of [
+    ['/system', 'Cached system state is unavailable.'],
+    ['/storage', 'Cached storage state is unavailable'],
+    ['/network', 'Network data unavailable']
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole('alert')).toContainText(message);
+  }
+});
+
+test('core pages have no automated accessibility violations', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expectAccessible(page);
+  await signIn(page);
+  for (const path of ['/', '/system', '/storage', '/media', '/downloads', '/containers', '/network', '/events', '/settings']) {
+    await page.goto(path);
+    await expect(page.getByRole('main')).toBeVisible();
+    await expectAccessible(page);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/media');
+  await expect(page.getByRole('heading', { name: 'Jellyfin', exact: true })).toBeVisible();
+  await expectAccessible(page);
+  const motion = await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Media' }).evaluate((element) => getComputedStyle(element).transitionDuration);
+  expect(parseFloat(motion)).toBeLessThanOrEqual(0.001);
 });
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 768, height: 1024 }, { width: 390, height: 844 }]) {
@@ -62,6 +115,7 @@ test('storage selects a filesystem and separates stale disk evidence on a phone'
   await expect(page.getByText('asleep')).toBeVisible();
   await expect(page.getByText(/health evidence/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectAccessible(page);
 });
 
 test('overview and media answer first-release questions across mixed states', async ({ page }) => {
@@ -87,20 +141,27 @@ test('overview and media answer first-release questions across mixed states', as
   await expect(page.getByText('All observed systems healthy')).toBeVisible();
   await expect(page.getByText('390 GB available').first()).toBeVisible();
   await expect(page.getByText('Mira · Playing · Direct play')).toBeVisible();
+  expect(await page.locator('.metric-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+  await expectAccessible(page);
+  await page.screenshot({ path: 'test-results/m9-overview-390.png', fullPage: true });
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Media' }).click();
   await expect(page.getByRole('heading', { name: 'Jellyfin' })).toBeVisible();
   await expect(page.getByText('Mira · Playing · Direct play')).toBeVisible();
   await expect(page.getByText('Noah · Paused · Transcoding')).toBeVisible();
   await expect(page.getByText(/Refresh failed \(timeout\)/)).toBeVisible();
+  await expectAccessible(page);
   for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    if (viewport.width === 768) expect(await page.locator('.sidebar').evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+    await page.screenshot({ path: `test-results/m9-media-${viewport.width}.png`, fullPage: true });
   }
   mediaResponse = { ...mediaResponse, connection: 'auth-error', playback: { ...mediaResponse.playback, errorCode: 'auth' } };
   await page.reload();
   await expect(page.getByText('Credentials rejected')).toBeVisible();
   await expect(page.getByText('Playback refresh failed (auth); last-good sessions are retained.')).toBeVisible();
   await expect(page.getByText('Mira · Playing · Direct play')).toBeVisible();
+  await expectAccessible(page);
 });
 
 test('downloads keeps Sonarr and Radarr queue identities and failures separate', async ({ page }) => {
@@ -110,6 +171,7 @@ test('downloads keeps Sonarr and Radarr queue identities and failures separate',
   await signIn(page); await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Downloads' }).click();
   await expect(page.getByRole('heading', { name: 'Managed downloads' })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Sonarr' })).toBeVisible(); await expect(page.getByRole('heading', { name: 'Radarr' })).toBeVisible(); await expect(page.getByText('Example Station S01E02')).toBeVisible(); await expect(page.getByText('Local Orbit')).toBeVisible(); await expect(page.getByText('Queue refresh failed (timeout); showing last-good data.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectAccessible(page);
 });
 
 test('indexers show fresh failure evidence, disabled state and unknown application connectivity', async ({ page }) => {
@@ -122,6 +184,7 @@ test('indexers show fresh failure evidence, disabled state and unknown applicati
   await expect(page.getByText('Example One')).toBeVisible(); await expect(page.getByText('Disabled by configuration')).toBeVisible();
   await expect(page.getByText(/Application connectivity: unknown/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectAccessible(page);
 });
 
 test('containers show a 50-item mixed inventory and read-only detail without phone overflow', async ({ page }) => {
@@ -135,6 +198,7 @@ test('containers show a 50-item mixed inventory and read-only detail without pho
   await page.getByText('service-1', { exact: true }).click();
   await expect(page.locator('details[open]').getByText('Working set (cache excluded)')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectAccessible(page);
 });
 
 test('network shows local peers, unknown last-seen and stale evidence on a phone', async ({ page }) => {
@@ -150,4 +214,5 @@ test('network shows local peers, unknown last-seen and stale evidence on a phone
   await expect(page.getByText('Last seen unknown')).toBeVisible();
   await expect(page.getByText(/Local status read failed \(permission-denied\)/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectAccessible(page);
 });

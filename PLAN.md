@@ -1,6 +1,6 @@
 # Execution plan
 
-Status: M0–M8 fixture implementation complete. M2 Ubuntu, M3 Jellyfin, M4 Arr, M5 Prowlarr, M6 Docker, M7 SMART, and M8 Tailscale/operational live evidence remain pending; M9 not started. Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
+Status: M0–M8 fixture implementation complete. M2 Ubuntu, M3 Jellyfin, M4 Arr, M5 Prowlarr, M6 Docker, M7 SMART, and M8 Tailscale/operational live evidence remain pending. M9.1 UI review is in progress; see [v1 validation report](docs/plans/v1-validation-report.md). Commands for completed milestones are implemented unless their report says otherwise. See [validation protocol](docs/plans/validation.md).
 
 ## Sequence and handoff discipline
 
@@ -202,6 +202,8 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 **Dependencies:** M7 for all retained series/event families. This is hardening of M2 persistence, not a second history implementation.
 
 ## M9 — monitoring v1 release
+
+**Status:** M9.1 fixture UI review in progress; M9.2–M9.3 and all required live release gates pending. See [v1 validation report](docs/plans/v1-validation-report.md).
 
 **Goal:** Ship a small, coherent, documented monitoring product with proven installation and failure behavior.
 

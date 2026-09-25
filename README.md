@@ -2,7 +2,7 @@
 
 A local-first, read-only mission control for an Ubuntu homelab. The intended experience is a calm, polished overview of host health, storage, media activity, containers, and remote access.
 
-**Status: M4 fixture implementation complete; Ubuntu host and live provider evidence pending.** LabDeck provides owner authentication, host health and capacity collection, cached trends/events, Jellyfin playback/library summaries, Sonarr/Radarr queue and catalog summaries, polished Overview/System/Storage/Media/Downloads views, read-only settings diagnostics, and hardened Compose packaging.
+**Status: M0–M8 fixture implementation complete; M9 release validation in progress.** Ubuntu host, live provider, hardware, restore-drill, and soak evidence remain pending. LabDeck provides owner authentication, cached host and integration monitoring, bounded history and events, read-only detail pages, and a private Compose deployment.
 
 Start with [PRODUCT.md](PRODUCT.md), then [ARCHITECTURE.md](ARCHITECTURE.md) and [PLAN.md](PLAN.md). Coding agents should read [AGENTS.md](AGENTS.md).
 
@@ -14,7 +14,7 @@ Start with [PRODUCT.md](PRODUCT.md), then [ARCHITECTURE.md](ARCHITECTURE.md) and
 - [Provider contract](docs/integrations/contract.md), [service integration notes](docs/integrations/services.md), and [host collector](docs/integrations/host-collector.md)
 - [Execution milestones](PLAN.md), [validation protocol](docs/plans/validation.md), and [risk register](docs/plans/risks.md)
 
-The deployment is one application container with local SQLite storage. An optional host-installed collector publishes sanitized snapshots for system monitoring today and later Docker, SMART, and Tailscale slices. It is an unprivileged, file-publishing service with no app command channel; see the [collector installation guide](deploy/systemd/README.md).
+The deployment is one application container with local SQLite storage. A host-installed collector publishes sanitized system, optional Docker, and optional Tailscale snapshots; a separate SMART timer publishes disk evidence. The application has no host command channel; see the [collector installation guide](deploy/systemd/README.md).
 
 The first release checkpoint focuses on host health, filesystem capacity, Jellyfin, and a polished overview. Subsequent milestones complete the wider v1 monitoring experience. No infrastructure control actions are included in v1.
 

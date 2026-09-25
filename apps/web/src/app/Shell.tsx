@@ -1,7 +1,16 @@
 import { Activity, Boxes, Clapperboard, Database, Download, LayoutDashboard, ListTree, LogOut, MonitorCog, Network, Settings } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () => Promise<void> }) {
+  const { pathname } = useLocation();
+  const previousPath = useRef(pathname);
+  useEffect(() => {
+    if (previousPath.current !== pathname) {
+      previousPath.current = pathname;
+      document.getElementById('main-content')?.focus();
+    }
+  }, [pathname]);
   return (
     <div className="app-shell">
       {demoMode ? <div className="demo-banner" role="status">Fixture demo mode · loopback access only</div> : null}

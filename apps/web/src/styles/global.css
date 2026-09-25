@@ -2,7 +2,7 @@
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #eceef2; background: #0a0b0d; color-scheme: dark; font-synthesis: none;
   --canvas: #0a0b0d; --surface: #101216; --surface-raised: #15181e; --border: #272b34;
-  --text: #eceef2; --muted: #9299a8; --faint: #656c79; --accent: #8aa2ff;
+  --text: #eceef2; --muted: #a8afbc; --faint: #9aa2b1; --accent: #a9baff;
   --green: #70c996; --amber: #dfb66f; --red: #ef8383; --radius: 14px;
 }
 * { box-sizing: border-box; }
@@ -20,6 +20,7 @@ a { color: inherit; }
 nav { display: grid; gap: 4px; }
 nav a, .quiet-button { display: flex; align-items: center; gap: 10px; min-height: 40px; border-radius: 9px; padding: 0 10px; color: var(--muted); text-decoration: none; border: 0; background: transparent; cursor: pointer; }
 nav a:hover, nav a:focus-visible, .quiet-button:hover, .quiet-button:focus-visible { color: var(--text); background: var(--surface-raised); outline: none; }
+nav a:focus-visible, .quiet-button:focus-visible, .text-link:focus-visible, .segmented button:focus-visible, .volume-selector select:focus-visible, .container-row summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 nav a.active { color: var(--text); background: #191c23; box-shadow: inset 0 0 0 1px #292e39; }
 .quiet-button { margin-top: auto; width: 100%; }
 .content { min-width: 0; }
@@ -40,6 +41,7 @@ p { line-height: 1.55; }
 .status--healthy { color: var(--green); } .status--warning { color: var(--amber); } .status--critical { color: var(--red); } .status--unknown { color: #aab1c0; }
 .text-link { display: inline-flex; align-items: center; gap: 6px; color: #b7c3ff; font-size: 14px; text-decoration: none; }
 .text-link:hover { text-decoration: underline; }
+.text-link { border-radius: 3px; }
 .panel { padding: 24px; }
 .summary-action { display: flex; align-items: center; gap: 14px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
@@ -76,17 +78,17 @@ form button { min-height: 44px; margin-top: 8px; border: 0; border-radius: 9px; 
 form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; color: var(--red); font-size: 13px; }
 .demo-banner { grid-column: 1 / -1; min-height: 32px; display: grid; place-items: center; padding: 6px 16px; color: #251b0c; background: var(--amber); font-size: 12px; font-weight: 750; letter-spacing: .02em; }
 .app-shell > .demo-banner { position: fixed; inset: 0 0 auto; z-index: 10; }.app-shell:has(> .demo-banner) .sidebar { padding-top: 56px; }.app-shell:has(> .demo-banner) main { padding-top: 86px; }
-@media (max-width: 760px) {
+@media (max-width: 800px) {
   .app-shell { display: block; padding-bottom: 70px; }.sidebar { position: fixed; z-index: 9; inset: auto 0 0; width: 100%; height: 64px; flex-direction: row; align-items: center; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); border: 1px solid var(--border); border-width: 1px 0 0; }
   .brand { display: none; } nav { display: flex; flex: 1; min-width: 0; overflow-x: auto; } nav a { flex: 0 0 42px; justify-content: center; padding: 0; } nav a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .quiet-button { margin: 0; width: 44px; font-size: 0; justify-content: center; }
   main { width: min(100% - 32px, 640px); padding-top: 34px; }.page-header { min-height: 80px; margin-bottom: 20px; }.page-context { display: none; }.empty-state { min-height: 330px; }
   .section-heading, .empty-row { flex-direction: column; }.summary-action { width: 100%; justify-content: space-between; }.app-shell:has(> .demo-banner) .sidebar { padding-top: 8px; }.app-shell:has(> .demo-banner) main { padding-top: 66px; }
   .metric-grid, .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.health-strip { align-items: flex-start; flex-direction: column; }.refresh-age { align-self: flex-start; }
 }
-@media (max-width: 430px) { .metric-grid, .detail-grid { grid-template-columns: 1fr; }.metric-card { padding: 16px; }.capacity-labels { display: grid; grid-template-columns: 1fr 1fr; } }
+@media (max-width: 430px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.detail-grid { grid-template-columns: 1fr; }.metric-card { padding: 14px; }.metric-card strong { margin-top: 10px; font-size: 20px; }.metric-label { gap: 5px; letter-spacing: 0; }.capacity-labels { display: grid; grid-template-columns: 1fr 1fr; } }
 @media (max-width: 430px) { .session-card { grid-template-columns: auto minmax(0,1fr); }.session-progress { grid-column: 2; text-align: left; }.library-counts { grid-template-columns: 1fr; } }
-@media (max-width: 760px) { .download-columns,.service-grid { grid-template-columns: 1fr; gap: 8px; }.queue-list article { flex-direction: column; }.queue-list article > div:last-child { text-align: left; } }
-@media (max-width: 760px) { .container-detail { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 800px) { .download-columns,.service-grid { grid-template-columns: 1fr; gap: 8px; }.queue-list article { flex-direction: column; }.queue-list article > div:last-child { text-align: left; } }
+@media (max-width: 800px) { .container-detail { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 430px) { .container-detail { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 .peer-list { display: grid; gap: .5rem; }
@@ -95,4 +97,4 @@ form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; 
 .peer-row p { margin: 0; overflow-wrap: anywhere; }
 .peer-row > div:last-child { text-align: right; flex-shrink: 0; }
 @media (max-width: 520px) { .peer-row { flex-direction: column; } .peer-row > div:last-child { text-align: left; } }
-@media (max-width: 760px) { .detail-toolbar { flex-wrap: wrap; } .detail-toolbar .segmented { margin-left: 0; max-width: 100%; overflow-x: auto; } }
+@media (max-width: 800px) { .detail-toolbar { flex-wrap: wrap; } .detail-toolbar .segmented { margin-left: 0; max-width: 100%; overflow-x: auto; } }
