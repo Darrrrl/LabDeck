@@ -22,6 +22,7 @@ const maxBody = 2 << 20
 const maxContainers = 100
 
 var safeID = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var safeComposeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 type Collector struct {
 	client   *http.Client
@@ -50,6 +51,10 @@ type listing struct {
 	Image   string   `json:"Image"`
 	State   string   `json:"State"`
 	Created int64    `json:"Created"`
+	Labels  struct {
+		Project string `json:"com.docker.compose.project"`
+		Service string `json:"com.docker.compose.service"`
+	} `json:"Labels"`
 }
 type inspect struct {
 	RestartCount uint64 `json:"RestartCount"`
@@ -159,6 +164,8 @@ func (c *Collector) Collect(now time.Time) (snapshots.Capability[snapshots.Docke
 
 func (c *Collector) project(ctx context.Context, api string, raw listing, now time.Time) (snapshots.DockerContainer, bool) {
 	item := snapshots.DockerContainer{ID: raw.ID, Name: safeName(raw.Names, raw.ID), Image: safeText(raw.Image, 160), CreatedAt: fromUnix(raw.Created), State: state(raw.State), Health: "no-healthcheck", MemoryKind: "unknown"}
+	item.ComposeProject = composeName(raw.Labels.Project)
+	item.ComposeService = composeName(raw.Labels.Service)
 	prior, hasPrior := c.previous[raw.ID]
 	var detail inspect
 	if err := c.get(ctx, "/v"+api+"/containers/"+raw.ID+"/json", &detail); err != nil {
@@ -332,4 +339,12 @@ func cpuPercent(value stats) *float64 {
 		return nil
 	}
 	return &percent
+}
+
+// Project only bounded identifiers from the two canonical Compose labels.
+func composeName(value string) *string {
+	if !safeComposeName.MatchString(value) {
+		return nil
+	}
+	return &value
 }

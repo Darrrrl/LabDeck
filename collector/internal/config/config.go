@@ -25,21 +25,30 @@ type SmartDisk struct {
 	Path       string `json:"path"`
 	DeviceType string `json:"deviceType"`
 }
+type DockerProject struct {
+	ID          string `json:"id"`
+	ComposeFile string `json:"composeFile"`
+}
 type Config struct {
-	HostID               string       `json:"hostId"`
-	OutputDirectory      string       `json:"outputDirectory"`
-	IntervalSeconds      int          `json:"intervalSeconds"`
-	Filesystems          []Filesystem `json:"filesystems"`
-	Interfaces           []Entity     `json:"interfaces"`
-	BlockDevices         []Entity     `json:"blockDevices"`
-	Docker               bool         `json:"docker"`
-	Tailscale            bool         `json:"tailscale"`
-	SmartOutputDirectory string       `json:"smartOutputDirectory"`
-	SmartDisks           []SmartDisk  `json:"smartDisks"`
+	HostID                  string          `json:"hostId"`
+	OutputDirectory         string          `json:"outputDirectory"`
+	IntervalSeconds         int             `json:"intervalSeconds"`
+	Filesystems             []Filesystem    `json:"filesystems"`
+	Interfaces              []Entity        `json:"interfaces"`
+	BlockDevices            []Entity        `json:"blockDevices"`
+	Docker                  bool            `json:"docker"`
+	DockerControlDirectory  string          `json:"dockerControlDirectory"`
+	DockerControlContainers []string        `json:"dockerControlContainers"`
+	DockerControlProjects   []DockerProject `json:"dockerControlProjects"`
+	FileShares              []Filesystem    `json:"fileShares"`
+	Tailscale               bool            `json:"tailscale"`
+	SmartOutputDirectory    string          `json:"smartOutputDirectory"`
+	SmartDisks              []SmartDisk     `json:"smartDisks"`
 }
 
 var safeID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 var safeDevice = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$`)
+var safeDockerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 
 func Load(path string) (Config, error) {
 	info, err := os.Stat(path)
@@ -120,6 +129,16 @@ func (c *Config) Validate() error {
 			ids[item.ID] = true
 		}
 	}
+	if len(c.FileShares) > 4 {
+		return errors.New("too many file shares")
+	}
+	sharePaths := map[string]bool{}
+	for _, item := range c.FileShares {
+		if !safeID.MatchString(item.ID) || ids[item.ID] || len(item.Path) > 512 || !filepath.IsAbs(item.Path) || filepath.Clean(item.Path) != item.Path || sharePaths[item.Path] {
+			return errors.New("invalid file share")
+		}
+		ids[item.ID], sharePaths[item.Path] = true, true
+	}
 	if len(c.SmartDisks) > 16 {
 		return errors.New("too many SMART disks")
 	}
@@ -140,6 +159,25 @@ func (c *Config) Validate() error {
 			return errors.New("SMART device type is unsupported")
 		}
 		ids[item.ID], pathsSmart[item.Path] = true, true
+	}
+	if len(c.DockerControlContainers) > 100 || len(c.DockerControlProjects) > 20 {
+		return errors.New("too many Docker control targets")
+	}
+	if len(c.DockerControlContainers)+len(c.DockerControlProjects) > 0 && (!c.Docker || !filepath.IsAbs(c.DockerControlDirectory) || filepath.Clean(c.DockerControlDirectory) == filepath.Clean(c.OutputDirectory) || filepath.Clean(c.DockerControlDirectory) == filepath.Clean(c.SmartOutputDirectory)) {
+		return errors.New("Docker control requires Docker observation and a separate absolute directory")
+	}
+	controls := map[string]bool{}
+	for _, name := range c.DockerControlContainers {
+		if !safeDockerName.MatchString(name) || controls["container:"+name] {
+			return errors.New("invalid Docker control container")
+		}
+		controls["container:"+name] = true
+	}
+	for _, project := range c.DockerControlProjects {
+		if !safeDockerName.MatchString(project.ID) || controls["project:"+project.ID] || !strings.HasPrefix(project.ComposeFile, "/etc/labdeck/compose/") || filepath.Clean(project.ComposeFile) != project.ComposeFile {
+			return errors.New("invalid Docker control project")
+		}
+		controls["project:"+project.ID] = true
 	}
 	return nil
 }

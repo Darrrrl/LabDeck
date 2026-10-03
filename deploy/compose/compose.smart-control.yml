@@ -1,0 +1,6 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_SMART_CONTROL_SOCKET_PATH: /run/labdeck-host/smart/control.sock
+    group_add:
+      - ${LABDECK_SMART_CONTROL_GID:?set the numeric labdeck-smart-control GID}

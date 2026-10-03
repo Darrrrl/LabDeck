@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { ProblemPage } from '../features/problems/ProblemPage.js';
 import { OverviewPage } from '../features/overview/OverviewPage.js';
 import { SettingsPage } from '../features/settings/SettingsPage.js';
 import { SystemPage } from '../features/system/SystemPage.js';
@@ -9,6 +10,7 @@ import { MediaPage } from '../features/media/MediaPage.js';
 import { DownloadsPage } from '../features/downloads/DownloadsPage.js';
 import { ContainersPage } from '../features/containers/ContainersPage.js';
 import { NetworkPage } from '../features/network/NetworkPage.js';
+import { FilesPage } from '../features/files/FilesPage.js';
 import { deleteSession, getSession } from './api.js';
 import { Login } from './Login.js';
 import { Shell } from './Shell.js';
@@ -32,7 +34,9 @@ export function App() {
         <Route path="downloads" element={<DownloadsPage />} />
         <Route path="containers" element={<ContainersPage />} />
         <Route path="network" element={<NetworkPage />} />
+        <Route path="files" element={<FilesPage />} />
         <Route path="events" element={<EventsPage />} />
+        <Route path="problems/:id" element={<ProblemPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<OverviewPage />} />
       </Route>

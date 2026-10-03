@@ -1,5 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
+import { join } from 'node:path';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import { hashPassword } from '../auth/password.js';
 import { buildApp } from './app.js';
 
@@ -50,6 +54,51 @@ describe('foundation HTTP API', () => {
     const app = await buildApp(config()); apps.push(app);
     const response = await app.inject({ method: 'GET', url: '/api/v1/overview', headers: { host: 'labdeck.test' } });
     expect(response.statusCode).toBe(401); expect(response.json()).toEqual({ error: 'unauthorized' });
+  });
+
+  it('protects and bounds problem investigation routes', async () => {
+    const app = await buildApp(config()); apps.push(app);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/problems', headers: { host: 'labdeck.test' } })).statusCode).toBe(401);
+    const session = await login(app);
+    const headers = { host: 'labdeck.test', cookie: cookieValue(session.headers['set-cookie'], '__Host-labdeck_session') };
+    const response = await app.inject({ method: 'GET', url: '/api/v1/problems', headers });
+    expect(response.json()).toEqual({ problems: [] }); expect(response.headers['cache-control']).toBe('no-store');
+    expect((await app.inject({ method: 'GET', url: '/api/v1/problems/invalid', headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/problems/' + 'a'.repeat(24), headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/api/v1/problems', headers })).statusCode).toBe(404);
+  });
+
+  it('requires owner CSRF and fresh share health before file service requests', async () => {
+    const directory = mkdtempSync('/tmp/labdeck-files-api-');
+    const snapshotPath = join(directory, 'snapshot.json');
+    const socketPath = join(directory, 'files.sock');
+    const snapshot = JSON.parse(readFileSync('tests/fixtures/host/system-v1.json', 'utf8')) as { generatedAt: string; capabilities: Record<string, unknown> };
+    const now = new Date().toISOString();
+    snapshot.generatedAt = now;
+    snapshot.capabilities.fileShares = { status: 'ok', observedAt: now, completeness: 'complete', data: [{ id: 'archive', path: '/srv/archive', kind: 'nfs', state: 'ok', observedAt: now, totalBytes: 1000, availableBytes: 500 }] };
+    writeFileSync(snapshotPath, JSON.stringify(snapshot));
+    const received: unknown[] = [];
+    const server = createServer((socket) => { let body = ''; socket.on('data', (chunk: Buffer) => { body += chunk.toString(); }); socket.on('end', () => { received.push(JSON.parse(body)); socket.end('{"ok":true,"entries":[],"nextCursor":null}\n'); }); });
+    await new Promise<void>((resolveListen) => server.listen(socketPath, resolveListen));
+    try {
+      const app = await buildApp(config({ hostSnapshotPath: snapshotPath, fileControlSocketPath: socketPath, fileControlShareId: 'archive' })); apps.push(app);
+      await app.ready();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+      const payload = { action: 'list', path: '' };
+      expect((await app.inject({ method: 'POST', url: '/api/v1/files/operations', headers: { host: 'labdeck.test' }, payload })).statusCode).toBe(401);
+      const loggedIn = await login(app);
+      const cookie = cookieValue(loggedIn.headers['set-cookie'], '__Host-labdeck_session');
+      const current = await app.inject({ method: 'GET', url: '/api/v1/session', headers: { host: 'labdeck.test', cookie } });
+      const headers = { host: 'labdeck.test', origin: 'https://labdeck.test', cookie, 'x-csrf-token': current.json<{ csrfToken: string }>().csrfToken };
+      expect((await app.inject({ method: 'POST', url: '/api/v1/files/operations', headers: { ...headers, 'x-csrf-token': 'wrong' }, payload })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'POST', url: '/api/v1/files/operations', headers, payload: { ...payload, device: '/dev/sda' } })).statusCode).toBe(400);
+      const listed = await app.inject({ method: 'POST', url: '/api/v1/files/operations', headers, payload });
+      expect(listed.statusCode).toBe(200);
+      expect(received).toEqual([payload]);
+    } finally {
+      await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('logs in with bound CSRF and sets a hardened cookie', async () => {
@@ -114,5 +163,38 @@ describe('foundation HTTP API', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/metrics?name=filesystem.used&range=400d', headers })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/metrics?name=library.movies&range=401d', headers })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/v1/network', headers })).json()).toMatchObject({ configured: false, peers: [] });
+  });
+  it('starts only a fresh configured ATA test after session and CSRF checks', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'labdeck-smart-control-'));
+    const snapshotPath = join(directory, 'snapshot.json');
+    const socketPath = join(directory, 'control.sock');
+    const snapshot = JSON.parse(readFileSync('tests/fixtures/smart/snapshot-v1.json', 'utf8')) as { generatedAt: string; disks: { observedAt: string }[] };
+    snapshot.generatedAt = new Date().toISOString();
+    for (const disk of snapshot.disks) disk.observedAt = snapshot.generatedAt;
+    writeFileSync(snapshotPath, JSON.stringify(snapshot));
+    const received: unknown[] = [];
+    const server = createServer((socket) => { let request = ''; socket.on('data', (chunk: Buffer) => { request += chunk.toString(); }); socket.on('end', () => { received.push(JSON.parse(request)); socket.end('{"status":"started"}\n'); }); });
+    await new Promise<void>((resolveListen) => server.listen(socketPath, resolveListen));
+    try {
+      const app = await buildApp(config({ smartSnapshotPath: snapshotPath, smartControlSocketPath: socketPath })); apps.push(app);
+      await app.ready();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+      const payload = { diskId: 'disk-a', type: 'short' };
+      expect((await app.inject({ method: 'POST', url: '/api/v1/storage/smart-tests', headers: { host: 'labdeck.test' }, payload })).statusCode).toBe(401);
+      const loggedIn = await login(app);
+      const cookie = cookieValue(loggedIn.headers['set-cookie'], '__Host-labdeck_session');
+      const current = await app.inject({ method: 'GET', url: '/api/v1/session', headers: { host: 'labdeck.test', cookie } });
+      const headers = { host: 'labdeck.test', origin: 'https://labdeck.test', cookie, 'x-csrf-token': current.json<{ csrfToken: string }>().csrfToken };
+      expect((await app.inject({ method: 'POST', url: '/api/v1/storage/smart-tests', headers: { ...headers, 'x-csrf-token': 'invalid' }, payload })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'POST', url: '/api/v1/storage/smart-tests', headers, payload: { diskId: 'disk-b', type: 'short' } })).statusCode).toBe(409);
+      expect((await app.inject({ method: 'POST', url: '/api/v1/storage/smart-tests', headers, payload: { ...payload, path: '/dev/sda' } })).statusCode).toBe(400);
+      const started = await app.inject({ method: 'POST', url: '/api/v1/storage/smart-tests', headers, payload });
+      expect(started.statusCode).toBe(202);
+      expect(started.json()).toEqual({ status: 'started' });
+      expect(received).toEqual([payload]);
+    } finally {
+      await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

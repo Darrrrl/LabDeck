@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { usePreferences } from '../../app/preferences.js';
 import { useQuery } from '@tanstack/react-query';
 import { getSystem } from '../../app/api.js';
 import { bytes, duration, relativeTime } from '../../components/format.js';
@@ -7,7 +7,9 @@ import { Status } from '../../components/Status.js';
 import type { HistoryRange } from '@labdeck/contracts';
 
 export function SystemPage() {
-  const [range, setRange] = useState<HistoryRange>('1h');
+  const [preferences, updatePreferences] = usePreferences();
+  const range = preferences.historyRange;
+  const setRange = (historyRange: HistoryRange) => updatePreferences({ historyRange });
   const query = useQuery({ queryKey: ['system', range], queryFn: () => getSystem(range), refetchInterval: 10_000 });
   return <main id="main-content" tabIndex={-1}><PageHeader title="System" eyebrow="HOST" />
     {query.data ? <><div className="detail-toolbar"><Status tone={query.data.freshness === 'fresh' ? 'healthy' : 'unknown'}>{query.data.freshness === 'fresh' ? 'Current' : 'Stale'}</Status><span>Observed {relativeTime(query.data.observedAt)}</span><Range value={range} onChange={setRange} /></div>

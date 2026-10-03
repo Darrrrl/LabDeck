@@ -21,9 +21,15 @@ describe('SQLite operational recovery', () => {
       persistEvent(active, { instanceId: 'host', kind: 'test.event', severity: 'info', observedAt: 100, origin: 'observed', dedupeKey: 'persistent-event', payload: { value: 1 } });
       await maintainDatabase('backup', source, backup);
       expect(readFileSync(backup).length).toBeGreaterThan(0);
+      const status = new HostQueries(active, false, () => true).settings(false).backup;
+      expect(status.lastSuccessfulAt).not.toBeNull();
+      expect(status.integrityVerifiedAt).toBe(status.lastSuccessfulAt);
+      await expect(maintainDatabase('backup', source, backup)).rejects.toThrow();
+      expect(new HostQueries(active, false, () => true).settings(false).backup).toEqual(status);
       await maintainDatabase('restore', backup, restored);
       const copy = new Database(restored, { readonly: true });
       expect(copy.prepare('SELECT count(*) AS count FROM sessions').get()).toEqual({ count: 0 });
+      expect(copy.prepare('SELECT count(*) AS count FROM backup_status').get()).toEqual({ count: 0 });
       expect(copy.prepare('SELECT count(*) AS count FROM events').get()).toEqual({ count: 1 });
       expect(copy.prepare('SELECT count(*) AS count FROM event_dedupe').get()).toEqual({ count: 1 });
       expect(copy.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
@@ -104,11 +110,11 @@ describe('SQLite operational recovery', () => {
     try {
       const source = join(directory, 'schema3.db'); const backup = join(directory, 'schema3-backup.db'); const restored = join(directory, 'candidate.db');
       const database = openDatabase(source);
-      database.exec('DROP TABLE event_dedupe'); database.prepare('DELETE FROM schema_migrations WHERE version=4').run(); database.close();
+      database.exec('DROP TABLE event_dedupe; DROP TABLE filesystem_forecast_days; DROP TABLE backup_status; DROP TABLE action_audit'); database.prepare('DELETE FROM schema_migrations WHERE version>=4').run(); database.close();
       await maintainDatabase('backup', source, backup);
       await maintainDatabase('restore', backup, restored);
       const upgraded = openDatabase(restored);
-      expect(upgraded.prepare('SELECT max(version) AS version FROM schema_migrations').get()).toEqual({ version: 4 });
+      expect(upgraded.prepare('SELECT max(version) AS version FROM schema_migrations').get()).toEqual({ version: 6 });
       upgraded.close();
       const original = new Database(backup, { readonly: true });
       expect(original.prepare('SELECT max(version) AS version FROM schema_migrations').get()).toEqual({ version: 3 });

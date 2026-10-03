@@ -8,4 +8,6 @@ Storage provides a configuration preview with day/hour selection. Activation rem
 
 There is no new socket, device mount, shell, queue, privileged web route or browser-to-helper channel. A future in-app Run/Schedule action requires its own authorization and auditing design. NVMe/SCSI test logs and host schedule-state ingestion are deferred until their protocol and installation evidence can be validated.
 
+The owner's later request for a web Start action is handled narrowly by [decision 006](006-web-started-smart-tests.md). Host-owned scheduling and the periodic read helper remain as described here.
+
 See the [operator setup](../operations/smart-tests.md) for activation and compatibility limits.

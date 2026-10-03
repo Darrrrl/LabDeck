@@ -12,6 +12,12 @@ const environmentSchema = z.object({
   LABDECK_WEB_ROOT: z.string().min(1).default('./apps/web/dist'),
   LABDECK_HOST_SNAPSHOT_PATH: z.string().min(1).optional(),
   LABDECK_SMART_SNAPSHOT_PATH: z.string().min(1).optional(),
+  LABDECK_SMART_CONTROL_SOCKET_PATH: z.string().min(1).optional(),
+  LABDECK_DOCKER_CONTROL_SOCKET_PATH: z.string().min(1).optional(),
+  LABDECK_DOCKER_CONTROL_CONTAINERS: z.string().optional(),
+  LABDECK_DOCKER_CONTROL_PROJECTS: z.string().optional(),
+  LABDECK_FILE_CONTROL_SOCKET_PATH: z.string().min(1).optional(),
+  LABDECK_FILE_CONTROL_SHARE_ID: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/).optional(),
   LABDECK_EXPECTED_RUNNING_CONTAINERS: z.string().optional(),
   LABDECK_JELLYFIN_BASE_URL: z.url().optional(),
   LABDECK_JELLYFIN_BROWSER_URL: z.url().optional(),
@@ -49,6 +55,12 @@ export interface AppConfig {
   webRoot: string;
   hostSnapshotPath?: string;
   smartSnapshotPath?: string;
+  smartControlSocketPath?: string;
+  dockerControlSocketPath?: string;
+  dockerControlContainers?: ReadonlySet<string>;
+  dockerControlProjects?: ReadonlySet<string>;
+  fileControlSocketPath?: string;
+  fileControlShareId?: string;
   expectedRunningContainers?: ReadonlySet<string>;
   jellyfin?: JellyfinConfig;
   arr?: ArrConfig[];
@@ -106,6 +118,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
   const configuredHosts = parsed.LABDECK_ALLOWED_HOSTS?.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
   const expectedNames = parsed.LABDECK_EXPECTED_RUNNING_CONTAINERS?.split(',').map((name) => name.trim()).filter(Boolean) ?? [];
   if (expectedNames.length > 100 || expectedNames.some((name) => !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name))) throw new Error('Expected-running container names must be safe and bounded');
+  const controlNames = parsed.LABDECK_DOCKER_CONTROL_CONTAINERS?.split(',').map((name) => name.trim()).filter(Boolean) ?? [];
+  const controlProjects = parsed.LABDECK_DOCKER_CONTROL_PROJECTS?.split(',').map((name) => name.trim()).filter(Boolean) ?? [];
+  if (Boolean(parsed.LABDECK_FILE_CONTROL_SOCKET_PATH) !== Boolean(parsed.LABDECK_FILE_CONTROL_SHARE_ID)) throw new Error('File control socket and share ID must be configured together');
+  if (controlNames.length > 100 || controlNames.some((name) => !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name)) || controlProjects.length > 20 || controlProjects.some((name) => !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name))) throw new Error('Docker control allowlists must be safe and bounded');
   const allowedHosts = new Set(configuredHosts?.length ? configuredHosts : [origin.host.toLowerCase()]);
   return {
     host: parsed.LABDECK_HOST,
@@ -115,6 +131,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     webRoot: resolve(parsed.LABDECK_WEB_ROOT),
     ...(parsed.LABDECK_HOST_SNAPSHOT_PATH ? { hostSnapshotPath: resolve(parsed.LABDECK_HOST_SNAPSHOT_PATH) } : {}),
     ...(parsed.LABDECK_SMART_SNAPSHOT_PATH ? { smartSnapshotPath: resolve(parsed.LABDECK_SMART_SNAPSHOT_PATH) } : {}),
+    ...(parsed.LABDECK_SMART_CONTROL_SOCKET_PATH ? { smartControlSocketPath: resolve(parsed.LABDECK_SMART_CONTROL_SOCKET_PATH) } : {}),
+    ...(parsed.LABDECK_DOCKER_CONTROL_SOCKET_PATH ? { dockerControlSocketPath: resolve(parsed.LABDECK_DOCKER_CONTROL_SOCKET_PATH) } : {}),
+    dockerControlContainers: new Set(controlNames), dockerControlProjects: new Set(controlProjects),
+    ...(parsed.LABDECK_FILE_CONTROL_SOCKET_PATH ? { fileControlSocketPath: resolve(parsed.LABDECK_FILE_CONTROL_SOCKET_PATH), fileControlShareId: parsed.LABDECK_FILE_CONTROL_SHARE_ID! } : {}),
     expectedRunningContainers: new Set(expectedNames),
     ...(jellyfin ? { jellyfin } : {}),
     arr,

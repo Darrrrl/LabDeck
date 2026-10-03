@@ -96,7 +96,7 @@ test('host storage and stale state remain legible', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
   await expect(page.getByText('Synthetic 4-Core CPU')).toBeVisible();
   await page.getByRole('link', { name: 'Storage' }).click();
-  await expect(page.getByRole('heading', { name: 'Storage' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Storage', exact: true })).toBeVisible();
   await expect(page.getByText('390 GB available')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
@@ -109,7 +109,7 @@ test('storage selects a filesystem and separates stale disk evidence on a phone'
   await page.route('**/api/v1/storage**', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, freshness: 'fresh', observedAt, filesystems: [filesystem('root', '/'), filesystem('media', '/srv/media')], history: { root: [], media: [] }, smart: { configured: true, freshness: 'fresh', observedAt, errorCode: null, failed: 0, warning: 0, unavailable: 1, disks: [{ id: 'array-a', label: 'Array disk A', state: 'asleep', observedAt, evidenceAt: earlier, temperatureWarning: false, identity: 'abc', serialSuffix: '1234', protocol: 'ATA', model: 'Example HDD', capacityBytes: 2_000_000_000_000, temperatureCelsius: 34, health: 'passed', powerOnHours: 1000, selfTest: { state: 'running', remainingPercent: 80, shortMinutes: 2, extendedMinutes: 600, history: [{ type: 'extended', result: 'failed', lifetimeHours: 900 }] }, ata: { reallocated: '0', pending: '0', uncorrectable: '0' }, nvme: null, scsi: null }] } }) }));
   await signIn(page);
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Storage' }).click();
-  await expect(page.getByRole('heading', { name: 'Storage' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Storage', exact: true })).toBeVisible();
   await page.getByLabel('Selected filesystem').selectOption('media');
   await expect(page.getByText('/srv/media · /dev/synthetic')).toBeVisible();
   await expect(page.getByText('Array disk A')).toBeVisible();
@@ -199,7 +199,7 @@ test('containers show a 50-item mixed inventory and read-only detail without pho
   await expect(page.getByRole('heading', { name: 'Docker observation' })).toBeVisible();
   await expect(page.getByText('service-49')).toBeVisible();
   await page.getByText('service-1', { exact: true }).click();
-  await expect(page.locator('details[open]').getByText('Working set (cache excluded)')).toBeVisible();
+  await expect(page.locator('.container-row[open]').getByText('Working set (cache excluded)')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectAccessible(page);
   await page.getByLabel('Show', { exact: true }).selectOption('attention');
@@ -218,7 +218,7 @@ test('network shows local peers, unknown last-seen and stale evidence on a phone
     { id: 'n-b', name: 'tablet', ips: ['100.101.102.105'], online: false, lastSeen: null }
   ] }) }));
   await signIn(page); await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Network' }).click();
-  await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Network', exact: true })).toBeVisible();
   await expect(page.getByText('1 online / 2 known')).toBeVisible();
   await expect(page.getByText('Last seen unknown')).toBeVisible();
   await expect(page.getByText(/Local status read failed \(permission-denied\)/)).toBeVisible();

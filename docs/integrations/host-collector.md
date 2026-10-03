@@ -61,3 +61,11 @@ Run a fixed `tailscale status --json` command with a 5s timeout and 2MiB output 
 The [Tailscale CLI](https://tailscale.com/docs/reference/tailscale-cli) documents JSON status output. Its [status types](https://github.com/tailscale/tailscale/blob/main/ipn/ipnstate/ipnstate.go) expose online and last-seen information, but support and completeness must be validated against the installed client. Export local backend status, self hostname/IPs and locally known peer IDs, hostnames, Tailscale IPs, online and optional last seen. Discard user profiles, keys and unrelated network metadata.
 
 Online comes from reported status, not recent byte traffic or a guaranteed probe. LastSeen can be omitted/zero and must stay unknown. Devices not visible under local network policy are not declared offline. No cloud admin API token is required. Tailscale itself uses its existing control infrastructure; LabDeck adds no cloud backend and continues displaying other local data if Tailscale is unavailable.
+
+Compose grouping additionally projects the two canonical project/service labels into optional identifier fields; it does not export arbitrary labels. See [decision 005](../decisions/005-monitoring-investigation-addons.md). Install the updated collector to obtain grouping metadata; older collectors display containers in the ungrouped section. Fixture parsing is not installed Engine/Compose compatibility evidence.
+
+## Mounted share health and optional file service
+
+The ordinary collector can probe at most four selected SMB/NFS mountpoints via one isolated child process per share with a five-second deadline. It checks the exact `/proc/self/mountinfo` mount and statfs capacity, publishing an optional `fileShares` capability every 30 seconds. One failed or hung network mount does not block the ordinary system snapshot. The app preserves last-good capacity with its original evidence time while showing current offline/timeout/error state.
+
+The separately installed [file service](../operations/files-setup.md) may access one selected full share as an unprivileged host user. The app receives only the group-restricted file socket, never that mount or host root. File requests are explicit owner actions; they do not trigger collector polling. See [decision 008](../decisions/008-mounted-share-file-service.md).

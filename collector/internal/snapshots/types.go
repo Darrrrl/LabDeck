@@ -21,6 +21,7 @@ type Capabilities struct {
 	Interfaces  Capability[[]NetworkInterface] `json:"interfaces"`
 	BlockIO     Capability[[]BlockDeviceIO]    `json:"blockIo"`
 	Docker      *Capability[DockerInventory]   `json:"docker,omitempty"`
+	FileShares  *Capability[[]FileShare]       `json:"fileShares,omitempty"`
 	Tailscale   *Capability[TailscaleStatus]   `json:"tailscale,omitempty"`
 }
 
@@ -84,6 +85,15 @@ type Filesystem struct {
 	ReservedBytes  uint64  `json:"reservedBytes"`
 	UsedRatio      float64 `json:"usedRatio"`
 }
+type FileShare struct {
+	ID             string    `json:"id"`
+	Path           string    `json:"path"`
+	Kind           string    `json:"kind"`
+	State          string    `json:"state"`
+	ObservedAt     time.Time `json:"observedAt"`
+	TotalBytes     *uint64   `json:"totalBytes"`
+	AvailableBytes *uint64   `json:"availableBytes"`
+}
 type NetworkInterface struct {
 	ID                     string   `json:"id"`
 	Name                   string   `json:"name"`
@@ -102,6 +112,8 @@ type DockerInventory struct {
 	Containers        []DockerContainer `json:"containers"`
 }
 type DockerContainer struct {
+	ComposeProject   *string    `json:"composeProject,omitempty"`
+	ComposeService   *string    `json:"composeService,omitempty"`
 	ID               string     `json:"id"`
 	Name             string     `json:"name"`
 	Image            string     `json:"image"`

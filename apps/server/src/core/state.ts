@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { HostCollectorSnapshot } from '@labdeck/contracts';
+import { recordForecastDays } from './storage-forecast.js';
 import { persistEvent, retainEvents } from './events.js';
 import { persistMetrics, type MetricObservation } from './metrics.js';
 
@@ -80,20 +81,37 @@ export class HostStateStore {
       for (const [name, capability] of Object.entries(snapshot.capabilities)) {
         if (!capability || capability.status !== 'ok') continue;
         if (name === 'docker' && oldDocker?.observedAt === capability.observedAt) continue;
+        if (name === 'docker' && snapshot.capabilities.docker?.status === 'ok' && !snapshot.capabilities.docker.data.inventoryComplete && oldDocker?.status === 'ok') {
+          const retained = { ...oldDocker, completeness: 'partial', data: { ...oldDocker.data, inventoryComplete: false } };
+          this.database.prepare("UPDATE capability_state SET normalized_json=? WHERE instance_id='host' AND capability='containers.inventory'").run(JSON.stringify(retained));
+          continue;
+        }
         if (name === 'tailscale') {
           const old = this.database.prepare("SELECT observed_at FROM capability_state WHERE instance_id='host' AND capability='network.peers'").get() as { observed_at: number } | undefined;
           if (old?.observed_at === Date.parse(capability.observedAt) || old && capability.completeness === 'partial') continue;
+        }
+        let normalized: unknown = capability;
+        if (name === 'fileShares' && snapshot.capabilities.fileShares?.status === 'ok') {
+          const previous = this.database.prepare("SELECT normalized_json FROM capability_state WHERE instance_id='host' AND capability='host.fileShares'").get() as { normalized_json: string } | undefined;
+          const old = previous ? JSON.parse(previous.normalized_json) as { data: { id: string; state: string; totalBytes: number | null; availableBytes: number | null; evidenceAt?: string | null; observedAt: string }[] } : undefined;
+          normalized = { ...snapshot.capabilities.fileShares, data: snapshot.capabilities.fileShares.data.map((share) => {
+            if (share.state === 'ok') return { ...share, evidenceAt: share.observedAt };
+            const prior = old?.data.find((item) => item.id === share.id);
+            return { ...share, totalBytes: prior?.totalBytes ?? null, availableBytes: prior?.availableBytes ?? null, evidenceAt: prior?.evidenceAt ?? (prior?.state === 'ok' ? prior.observedAt : null) };
+          }) };
         }
         this.database.prepare(`INSERT INTO capability_state(instance_id, capability, schema_version, observed_at, succeeded_at, normalized_json)
           VALUES (?, ?, '1', ?, ?, ?)
           ON CONFLICT(instance_id, capability) DO UPDATE SET schema_version = excluded.schema_version,
           observed_at = excluded.observed_at, succeeded_at = excluded.succeeded_at, normalized_json = excluded.normalized_json`)
-          .run(HOST_INSTANCE, name === 'docker' ? 'containers.inventory' : name === 'tailscale' ? 'network.peers' : `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(capability));
+          .run(HOST_INSTANCE, name === 'docker' ? 'containers.inventory' : name === 'tailscale' ? 'network.peers' : `host.${name === 'blockIo' ? 'block-io' : name}`, Date.parse(capability.observedAt), attemptedAt, JSON.stringify(normalized));
       }
 
       const docker = snapshot.capabilities.docker;
       if (docker?.status === 'error') this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,attempted_at,safe_error_code) VALUES ('host','docker',?,?) ON CONFLICT(instance_id,group_id) DO UPDATE SET attempted_at=excluded.attempted_at,safe_error_code=excluded.safe_error_code`).run(attemptedAt, docker.errorCode);
-      else if (docker?.status === 'ok' && oldDocker?.observedAt !== docker.observedAt) {
+      else if (docker?.status === 'ok' && !docker.data.inventoryComplete) {
+        this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,attempted_at,safe_error_code) VALUES ('host','docker',?,'partial-inventory') ON CONFLICT(instance_id,group_id) DO UPDATE SET attempted_at=excluded.attempted_at,safe_error_code='partial-inventory'`).run(attemptedAt);
+      } else if (docker?.status === 'ok' && oldDocker?.observedAt !== docker.observedAt) {
         this.database.prepare(`INSERT INTO poll_state(instance_id,group_id,last_success_at,attempted_at,safe_error_code) VALUES ('host','docker',?,?,NULL) ON CONFLICT(instance_id,group_id) DO UPDATE SET last_success_at=excluded.last_success_at,attempted_at=excluded.attempted_at,safe_error_code=NULL`).run(attemptedAt, attemptedAt);
         this.#dockerEvents(docker, oldDocker, attemptedAt);
       }
@@ -117,6 +135,7 @@ export class HostStateStore {
         .run(HOST_INSTANCE, attemptedAt, attemptedAt);
 
       persistMetrics(this.database, observations(snapshot), attemptedAt);
+      recordForecastDays(this.database, snapshot, attemptedAt);
       this.#filesystemEvents(snapshot, oldRatios, attemptedAt);
       if (previous && previous.consecutive_failures >= 2 && previous.succeeded_at !== null) {
         persistEvent(this.database, {

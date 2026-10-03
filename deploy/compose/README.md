@@ -37,6 +37,12 @@ Review the rendered configuration before starting it. The override adds a supple
 
 For optional SMART evidence, first install the separate host timer described in [systemd setup](../systemd/README.md), then add `-f deploy/compose/compose.smart.yml` alongside the host override. The SMART override only points the app at `/run/labdeck-host/smart/snapshot.json` inside that same read-only sanitized snapshot mount. Do not mount `/dev`, `/sys`, or a Docker socket into the app.
 
+For web-started short and extended ATA tests, install the separate host control service and add `-f deploy/compose/compose.smart-control.yml`. Set `LABDECK_SMART_CONTROL_GID` to the dedicated control group's numeric GID. The socket sits in the existing read-only host mount; no device or writable host directory is added to the app. See [host setup](../systemd/README.md) before enabling this opt-in action.
+
+For allowlisted Docker actions, install the separate host control service and add `-f deploy/compose/compose.docker-control.yml` with its dedicated numeric GID and reviewed target names. This override grants only the local control-socket group, not the Docker group or socket. See [host setup](../systemd/README.md).
+
+For mounted share status and optional file operations, follow the [file service setup](../../docs/operations/files-setup.md). Add `-f deploy/compose/compose.files.yml` only after the host file service is installed. The app receives the file socket through the existing sanitized host mount; it never receives the share mount.
+
 ## Jellyfin monitoring
 
 Create a dedicated Jellyfin API key and store only its value in a host file readable by container UID/GID `10001:10001`, mode `0440`. Configure the internal API base URL separately from the browser URL; both may include a reverse-proxy path prefix. The browser URL is only used for the “Open Jellyfin” link.

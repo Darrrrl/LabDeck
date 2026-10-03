@@ -1,11 +1,11 @@
-import { timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import staticFiles from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { historyRangeSchema } from '@labdeck/contracts';
+import { dockerActionRequestSchema, historyRangeSchema, smartTestRequestSchema } from '@labdeck/contracts';
 import { LoginLimiter } from '../auth/login-limiter.js';
 import { verifyPassword } from '../auth/password.js';
 import { PreloginCsrfStore } from '../auth/prelogin-csrf.js';
@@ -16,7 +16,10 @@ import { HostStateService, HostStateStore } from '../core/state.js';
 import { HostQueries } from '../core/queries.js';
 import { HostMonitor } from '../integrations/host/monitor.js';
 import { SmartMonitor } from '../integrations/host/smart-monitor.js';
+import { fileOperation } from '../integrations/host/file-control.js';
 import { SmartStateStore } from '../integrations/host/smart-state.js';
+import { runDockerAction } from '../integrations/host/docker-action-control.js';
+import { startSmartTest } from '../integrations/host/smart-test-control.js';
 import { ReadOnlyTransport } from '../core/read-only-transport.js';
 import { JellyfinAdapter } from '../integrations/jellyfin/adapter.js';
 import { JellyfinMonitor } from '../integrations/jellyfin/monitor.js';
@@ -30,6 +33,17 @@ import { ProwlarrMonitor } from '../integrations/prowlarr/monitor.js';
 import { ProwlarrStateStore } from '../integrations/prowlarr/state.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(1024), csrfToken: z.string().min(20).max(256) }).strict();
+const filePathSchema = z.string().min(1).max(2048);
+const uploadIdSchema = z.string().regex(/^[a-f0-9]{32}$/);
+const fileRequestSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('list'), path: z.string().max(2048), cursor: z.string().max(255).optional() }).strict(),
+  z.object({ action: z.literal('start'), path: filePathSchema, size: z.number().int().min(0).max(100 * 1024 ** 3), resumeId: uploadIdSchema.optional() }).strict(),
+  z.object({ action: z.literal('chunk'), uploadId: uploadIdSchema, offset: z.number().int().nonnegative(), data: z.string().min(1).max(4 * 1024 ** 2 * 4 / 3 + 8) }).strict(),
+  z.object({ action: z.literal('finish'), uploadId: uploadIdSchema }).strict(),
+  z.object({ action: z.literal('rename'), from: filePathSchema, to: filePathSchema }).strict(),
+  z.object({ action: z.literal('delete'), path: filePathSchema }).strict(),
+  z.object({ action: z.literal('mkdir'), path: filePathSchema }).strict()
+]);
 function exactEqual(left: string, right: string): boolean {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
@@ -51,7 +65,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     config.jellyfin ? { id: config.jellyfin.id, name: config.jellyfin.name, browserUrl: config.jellyfin.browserUrl } : undefined,
     (config.arr ?? []).map(({ id, name, browserUrl }) => ({ id, name, browserUrl })),
     config.prowlarr ? { id: 'prowlarr', name: 'Prowlarr', browserUrl: config.prowlarr.browserUrl } : undefined,
-    config.expectedRunningContainers, config.smartSnapshotPath !== undefined);
+    config.expectedRunningContainers, config.smartSnapshotPath !== undefined, Boolean(config.smartControlSocketPath && !config.demoMode));
   const hostMonitor = config.hostSnapshotPath ? new HostMonitor(config.hostSnapshotPath, hostState) : undefined;
   const smartMonitor = config.smartSnapshotPath ? new SmartMonitor(config.smartSnapshotPath, smartState) : undefined;
   const jellyfinMonitor = config.jellyfin ? new JellyfinMonitor(new JellyfinAdapter(new ReadOnlyTransport(config.jellyfin.baseUrl, config.jellyfin.apiKey)), jellyfinState) : undefined;
@@ -74,6 +88,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     bodyLimit: 64 * 1024
   });
   let checkpointTimer: ReturnType<typeof setInterval> | undefined;
+  let dockerActionInFlight = false;
+  let fileRequestsInFlight = 0;
 
   await app.register(cookie);
   await app.register(helmet, {
@@ -166,6 +182,25 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     const range = historyRangeSchema.safeParse((request.query as { range?: string }).range).data ?? '1h';
     return hostQueries.storage(range);
   });
+  app.post('/api/v1/storage/smart-tests', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const origin = request.headers.origin;
+    const token = request.cookies[sessionCookie];
+    const csrfToken = typeof request.headers['x-csrf-token'] === 'string' ? request.headers['x-csrf-token'] : undefined;
+    if (!origin || !exactEqual(origin, config.canonicalOrigin) || !sessions.verifyCsrf(token, csrfToken)) return reply.code(403).send({ error: 'forbidden' });
+    if (!config.smartControlSocketPath || config.demoMode) return reply.code(503).send({ error: 'not-configured' });
+    const parsed = smartTestRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid-request' });
+    const smart = hostQueries.smart();
+    const disk = smart.disks.find((item) => item.id === parsed.data.diskId);
+    if (!disk || disk.protocol !== 'ATA' || disk.state !== 'ok' || disk.selfTest?.state === 'running' || smart.freshness !== 'fresh' || smart.errorCode) return reply.code(409).send({ error: 'disk-unavailable' });
+    try {
+      const status = await startSmartTest(config.smartControlSocketPath, parsed.data.diskId, parsed.data.type);
+      if (status === 'started') return reply.code(202).send({ status });
+      if (status === 'rate-limited') return reply.code(429).send({ status });
+      return reply.code(409).send({ status: status === 'device-unavailable' ? status : 'rejected' });
+    } catch { return reply.code(503).send({ error: 'control-unavailable' }); }
+  });
   app.get('/api/v1/events', (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const query = request.query as { limit?: string; before?: string };
@@ -179,8 +214,80 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     return hostQueries.media();
   });
   app.get('/api/v1/downloads', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.downloads(); });
-  app.get('/api/v1/containers', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.containers(); });
+  app.get('/api/v1/containers', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return { ...hostQueries.containers(), controls: { available: Boolean(config.dockerControlSocketPath && !config.demoMode), containers: [...(config.dockerControlContainers ?? [])], projects: [...(config.dockerControlProjects ?? [])] } }; });
+  app.post('/api/v1/containers/actions', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const origin = request.headers.origin;
+    const csrfToken = typeof request.headers['x-csrf-token'] === 'string' ? request.headers['x-csrf-token'] : undefined;
+    if (!origin || !exactEqual(origin, config.canonicalOrigin) || !sessions.verifyCsrf(request.cookies[sessionCookie], csrfToken)) return reply.code(403).send({ error: 'forbidden' });
+    if (!config.dockerControlSocketPath || config.demoMode) return reply.code(503).send({ error: 'not-configured' });
+    const parsed = dockerActionRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid-request' });
+    const target = parsed.data;
+    const inventory = hostQueries.containers();
+    if (inventory.freshness !== 'fresh' || inventory.errorCode || inventory.inventoryComplete !== true) return reply.code(409).send({ error: 'inventory-unavailable' });
+    if (target.kind === 'container' && (!/^[a-f0-9]{64}$/.test(target.id) || !inventory.containers.some((item) => item.id === target.id && config.dockerControlContainers?.has(item.name)))) return reply.code(409).send({ error: 'target-unavailable' });
+    if (target.kind === 'project' && (!config.dockerControlProjects?.has(target.id) || !inventory.containers.some((item) => item.composeProject === target.id))) return reply.code(409).send({ error: 'target-unavailable' });
+    if (dockerActionInFlight) return reply.code(429).send({ error: 'action-in-progress' });
+    const id = randomUUID(), requestedAt = Date.now();
+    database.prepare('INSERT INTO action_audit(id,kind,target_id,action,requested_at,result) VALUES (?,?,?,?,?,?)').run(id, target.kind, target.id, target.action, requestedAt, 'requested');
+    dockerActionInFlight = true;
+    let status: 'completed' | 'rejected';
+    try { status = await runDockerAction(config.dockerControlSocketPath, target); }
+    catch { database.prepare('UPDATE action_audit SET completed_at=?,result=? WHERE id=?').run(Date.now(), 'unavailable', id); return reply.code(503).send({ id, error: 'control-unavailable' }); }
+    finally { dockerActionInFlight = false; }
+    database.prepare('UPDATE action_audit SET completed_at=?,result=? WHERE id=?').run(Date.now(), status, id);
+    database.prepare('DELETE FROM action_audit WHERE id IN (SELECT id FROM action_audit ORDER BY requested_at DESC LIMIT -1 OFFSET 1000)').run();
+    return reply.code(status === 'completed' ? 200 : 409).send({ id, status });
+  });
+  app.get('/api/v1/containers/actions', (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const rows = database.prepare("SELECT id,kind,target_id AS targetId,action,requested_at AS requestedAt,completed_at AS completedAt,result FROM action_audit WHERE kind IN ('container','project') ORDER BY requested_at DESC LIMIT 20").all() as { id: string; kind: string; targetId: string; action: string; requestedAt: number; completedAt: number | null; result: string }[];
+    return { actions: rows.map((row) => ({ ...row, requestedAt: new Date(row.requestedAt).toISOString(), completedAt: row.completedAt === null ? null : new Date(row.completedAt).toISOString() })) };
+  });
   app.get('/api/v1/network', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.network(); });
+  app.get('/api/v1/files/shares', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return { ...hostQueries.fileShares(), control: { available: Boolean(config.fileControlSocketPath && !config.demoMode), shareId: config.fileControlShareId ?? null } }; });
+  app.post('/api/v1/files/operations', { bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const origin = request.headers.origin;
+    const csrfToken = typeof request.headers['x-csrf-token'] === 'string' ? request.headers['x-csrf-token'] : undefined;
+    if (!origin || !exactEqual(origin, config.canonicalOrigin) || !sessions.verifyCsrf(request.cookies[sessionCookie], csrfToken)) return reply.code(403).send({ error: 'forbidden' });
+    if (!config.fileControlSocketPath || !config.fileControlShareId || config.demoMode) return reply.code(503).send({ error: 'not-configured' });
+    const parsed = fileRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid-request' });
+    const health = hostQueries.fileShares();
+    if (health.freshness !== 'fresh' || !health.shares.some((share) => share.id === config.fileControlShareId && share.state === 'ok')) return reply.code(409).send({ error: 'share-unavailable' });
+    if (fileRequestsInFlight >= 2) return reply.code(429).send({ error: 'file-service-busy' });
+    const action = parsed.data.action;
+    const auditId = action !== 'list' && action !== 'chunk' ? randomUUID() : undefined;
+    if (auditId) database.prepare('INSERT INTO action_audit(id,kind,target_id,action,requested_at,result) VALUES (?,?,?,?,?,?)').run(auditId, 'file', config.fileControlShareId, action, Date.now(), 'requested');
+    fileRequestsInFlight += 1;
+    try {
+      const result = await fileOperation(config.fileControlSocketPath, parsed.data);
+      if (auditId) {
+        database.prepare('UPDATE action_audit SET completed_at=?,result=? WHERE id=?').run(Date.now(), result.ok ? 'completed' : 'rejected', auditId);
+        database.prepare('DELETE FROM action_audit WHERE id IN (SELECT id FROM action_audit ORDER BY requested_at DESC LIMIT -1 OFFSET 1000)').run();
+      }
+      if (!result.ok) return reply.code(result.error === 'collision' ? 409 : 400).send({ error: result.error ?? 'rejected' });
+      return result;
+    } catch {
+      if (auditId) database.prepare('UPDATE action_audit SET completed_at=?,result=? WHERE id=?').run(Date.now(), 'unavailable', auditId);
+      return reply.code(503).send({ error: 'file-service-unavailable' });
+    } finally { fileRequestsInFlight -= 1; }
+  });
+  app.get('/api/v1/files/actions', (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const rows = database.prepare("SELECT id,action,requested_at AS requestedAt,completed_at AS completedAt,result FROM action_audit WHERE kind='file' ORDER BY requested_at DESC LIMIT 20").all() as { id: string; action: string; requestedAt: number; completedAt: number | null; result: string }[];
+    return { actions: rows.map((row) => ({ ...row, requestedAt: new Date(row.requestedAt).toISOString(), completedAt: row.completedAt === null ? null : new Date(row.completedAt).toISOString() })) };
+  });
+  app.get('/api/v1/problems', (_request, reply) => { reply.header('Cache-Control', 'no-store'); return hostQueries.problems(); });
+  app.get('/api/v1/problems/:id', (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const { id } = request.params as { id: string };
+    if (!/^[a-f0-9]{24}$/.test(id)) return reply.code(400).send({ error: 'invalid-request' });
+    const detail = hostQueries.problem(id);
+    return detail ?? reply.code(404).send({ error: 'not-current' });
+  });
   app.get('/api/v1/metrics', (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const parsed = z.object({ name: z.enum(['library.movies', 'library.series', 'library.episodes', 'filesystem.used', 'filesystem.available']), range: historyRangeSchema, entity: z.string().regex(/^[a-zA-Z0-9:_-]{1,80}$/).optional() }).strict().safeParse(request.query);

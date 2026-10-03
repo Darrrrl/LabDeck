@@ -1,5 +1,8 @@
+import { currentProblems } from './problems.js';
+import type { ProblemDetailResponse } from '@labdeck/contracts';
 import type Database from 'better-sqlite3';
-import type { ContainersResponse, DownloadsResponse, EventsResponse, HostCollectorSnapshot, IndexerHealthResponse, MediaResponse, MediaSession, NetworkResponse, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import type { ContainersResponse, DownloadsResponse, EventsResponse, FileSharesResponse, HostCollectorSnapshot, IndexerHealthResponse, MediaResponse, MediaSession, NetworkResponse, OverviewResponse, StorageResponse, SystemResponse } from '@labdeck/contracts';
+import { storageForecast } from './storage-forecast.js';
 import { persistenceDiagnostics } from '../db/persistence.js';
 
 type Capability = HostCollectorSnapshot['capabilities'][keyof HostCollectorSnapshot['capabilities']];
@@ -36,7 +39,8 @@ export class HostQueries {
     private readonly downloadConfigs: DownloadConfig[] = [],
     private readonly indexerConfig?: IndexerConfig,
     private readonly expectedRunningContainers: ReadonlySet<string> = new Set(),
-    private readonly smartConfigured = false
+    private readonly smartConfigured = false,
+    private readonly smartTestControlAvailable = false
   ) {}
 
   overview(): OverviewResponse {
@@ -111,7 +115,7 @@ export class HostQueries {
     };
   }
 
-  storage(range: HistoryRange): StorageResponse {
+  storage(range: HistoryRange, includeHistory = true): StorageResponse {
     const row = this.capability('host.filesystems');
     const capability = parseCapability<FilesystemsCapability>(row);
     const filesystems = capability?.status === 'ok' ? capability.data.map((filesystem) => ({
@@ -121,7 +125,8 @@ export class HostQueries {
     })) : [];
     return {
       configured: this.configured, freshness: freshness(row?.observed_at ?? null, this.now()), observedAt: iso(row?.observed_at ?? null), filesystems,
-      history: Object.fromEntries(filesystems.map((filesystem) => [filesystem.id, this.metric('filesystem.used', range, `filesystem:${filesystem.id}`)])), smart: this.smart()
+      forecasts: includeHistory ? Object.fromEntries((capability?.status === 'ok' ? capability.data : []).map((fs) => [fs.id, storageForecast(this.database, fs, row!.observed_at, this.now())])) : {},
+      history: includeHistory ? Object.fromEntries(filesystems.map((filesystem) => [filesystem.id, this.metric('filesystem.used', range, `filesystem:${filesystem.id}`)])) : {}, smart: this.smart()
     };
   }
 
@@ -132,7 +137,7 @@ export class HostQueries {
     let cursor: Record<string, { active?: boolean }> = {};
     try { const cursorRow = this.database.prepare("SELECT cursor_json FROM poll_state WHERE instance_id='smart' AND group_id='snapshot'").get() as { cursor_json: string | null } | undefined; if (cursorRow?.cursor_json) cursor = JSON.parse(cursorRow.cursor_json) as typeof cursor; } catch { cursor = {}; }
     const disks = (observed?.disks ?? []).map((disk) => ({ ...disk, temperatureWarning: cursor[disk.id]?.active === true }));
-    return { configured: this.smartConfigured, freshness: freshnessWith(row?.observed_at ?? null, this.now(), 30 * 60_000), observedAt: iso(row?.observed_at ?? null), errorCode: poll?.safe_error_code ?? null,
+    return { configured: this.smartConfigured, testControlAvailable: this.smartTestControlAvailable, freshness: freshnessWith(row?.observed_at ?? null, this.now(), 30 * 60_000), observedAt: iso(row?.observed_at ?? null), errorCode: poll?.safe_error_code ?? null,
       failed: disks.filter((disk) => disk.state === 'ok' && disk.health === 'failed').length,
       warning: disks.filter((disk) => disk.state === 'ok' && (disk.health === 'warning' || disk.temperatureWarning)).length,
       unavailable: disks.filter((disk) => disk.state !== 'ok').length, disks };
@@ -149,6 +154,18 @@ export class HostQueries {
       events: page.map((event) => ({ id: event.id, entityId: event.entity_id, kind: event.kind, severity: event.severity, observedAt: new Date(event.observed_at).toISOString(), payload: JSON.parse(event.payload_json) as Record<string, string | number | boolean | null> })),
       nextCursor: rows.length > bounded ? page.at(-1)?.id ?? null : null
     };
+  }
+
+  problems() { return { problems: currentProblems(this) }; }
+
+  problem(id: string): ProblemDetailResponse | undefined {
+    const problem = currentProblems(this).find((item) => item.id === id);
+    if (!problem) return undefined;
+    const rows = this.database.prepare(`SELECT id,entity_id,instance_id,kind,severity,observed_at,occurred_at,origin,payload_json FROM events
+      WHERE instance_id=? AND (? IS NULL OR entity_id=?) ORDER BY observed_at DESC,id DESC LIMIT 10`).all(problem.instanceId, problem.entityId, problem.entityId) as { id: number; entity_id: string | null; instance_id: string; kind: string; severity: 'info' | 'warning' | 'critical'; observed_at: number; occurred_at: number | null; origin: 'upstream' | 'observed' | 'threshold'; payload_json: string }[];
+    const chart = problem.entityId?.startsWith('filesystem:') ? { label: 'Used capacity · past 24 hours', unit: 'bytes' as const, points: this.metric('filesystem.used', '24h', problem.entityId) }
+      : problem.detailPath === '/system' ? { label: 'CPU utilization · past 24 hours', unit: 'percent' as const, points: this.metric('cpu.utilization', '24h') } : null;
+    return { problem, chart, events: rows.map((row) => ({ id: row.id, entityId: row.entity_id, instanceId: row.instance_id, kind: row.kind, severity: row.severity, observedAt: iso(row.observed_at)!, occurredAt: iso(row.occurred_at), origin: row.origin, payload: JSON.parse(row.payload_json) as Record<string, string | number | boolean | null> })) };
   }
 
   media(): MediaResponse {
@@ -176,6 +193,12 @@ export class HostQueries {
       running: observed ? containers.filter((item) => item.state === 'running').length : null,
       unhealthy: observed ? containers.filter((item) => item.health === 'unhealthy').length : null,
       expectedStopped: observed ? containers.filter((item) => item.expectedRunning && item.state !== 'running').length : null, containers };
+  }
+
+  fileShares(): FileSharesResponse {
+    const row = this.capability('host.fileShares');
+    const observed = parseJson<{ data: FileSharesResponse['shares'] }>(row?.normalized_json);
+    return { configured: Boolean(row), freshness: freshnessWith(row?.observed_at ?? null, this.now(), 90_000), observedAt: iso(row?.observed_at ?? null), shares: observed?.data ?? [] };
   }
 
   network(): NetworkResponse {
@@ -214,6 +237,10 @@ export class HostQueries {
       ],
       authentication: 'configured' as const, demoMode, version: '0.2.0',
       hostCollector: { configured: this.configured, historyAvailable: this.historyAvailable(), message: this.configured ? 'Reading the configured snapshot file. The application has no host command or privilege path.' : 'Set LABDECK_HOST_SNAPSHOT_PATH and mount the collector public directory read-only.' },
+      backup: (() => {
+        const row = this.database.prepare('SELECT successful_at,verified_at FROM backup_status WHERE id=1').get() as { successful_at: number; verified_at: number } | undefined;
+        return { lastSuccessfulAt: iso(row?.successful_at ?? null), integrityVerifiedAt: iso(row?.verified_at ?? null) };
+      })(),
       persistence: persistenceDiagnostics(this.database)
     };
   }

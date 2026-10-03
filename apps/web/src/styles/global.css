@@ -148,3 +148,38 @@ form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; 
   .wallboard-widget { padding: 16px; }
   .wallboard-widget p { margin: 8px 0; }
 }
+
+.overview-widgets { display: flex; flex-direction: column; gap: 20px; }
+.overview-widgets > .media-section { margin-top: 0; }
+.compose-project > summary, .compose-service > summary { cursor: pointer; padding: 12px 0; }
+.compose-project > summary span { margin-left: 16px; color: var(--muted); font-size: 13px; }
+.compose-service { margin-top: 8px; }
+.compose-service .container-row { margin-top: 12px; }
+.forecast { margin-top: 20px; border-top: 1px solid var(--border); }
+.forecast p, .preferences p { line-height: 1.6; }
+.preferences input[type="checkbox"] { width: auto; margin-right: 8px; }
+.widget-order { padding-left: 24px; max-width: 600px; }
+.widget-order li { padding: 8px; }
+.widget-order li > span { display: inline-block; min-width: 110px; text-transform: capitalize; }
+.widget-order li > div { display: inline-flex; gap: 8px; }
+.preferences button { padding: 8px 12px; color: var(--text); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 6px; }
+.preferences button:disabled { opacity: .5; }
+.problem-list { margin: 20px 0; }
+.problem-list ul, .problem-events { list-style: none; padding: 0; }
+.problem-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0; }
+.problem-list li > span:last-child, .problem-events li > span { color: var(--muted); font-size: 13px; }
+.problem-events li { display: grid; gap: 8px; padding: 12px 0; }
+.evidence-chart { width: 100%; height: 160px; color: var(--accent); }
+.evidence-chart line { stroke: currentColor; stroke-width: 2; }
+.evidence-chart circle { fill: currentColor; }
+.history-table { overflow-x: auto; max-height: 360px; }
+.history-table th, .history-table td { text-align: left; padding: 8px; }
+@media (max-width: 800px) { .wallboard-actions { flex-wrap: wrap; gap: 8px; } }
+.docker-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .75rem 0; }
+.docker-actions button { text-transform: capitalize; }
+.docker-actions p { flex-basis: 100%; margin: .25rem 0; }
+.file-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.file-list { list-style: none; padding: 0; }
+.file-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); padding: 10px 0; overflow-wrap: anywhere; }
+.file-list strong { overflow-wrap: anywhere; }
+.file-list button, .file-toolbar button { min-height: 36px; }

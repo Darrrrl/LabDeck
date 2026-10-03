@@ -1,0 +1,8 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_DOCKER_CONTROL_SOCKET_PATH: /run/labdeck-host/docker-control/control.sock
+      LABDECK_DOCKER_CONTROL_CONTAINERS: ${LABDECK_DOCKER_CONTROL_CONTAINERS:-}
+      LABDECK_DOCKER_CONTROL_PROJECTS: ${LABDECK_DOCKER_CONTROL_PROJECTS:-}
+    group_add:
+      - ${LABDECK_DOCKER_CONTROL_GID:?set the numeric labdeck-docker-control GID}

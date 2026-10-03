@@ -11,7 +11,7 @@ function snapshot(): HostCollectorSnapshot {
   const host = hostCollectorSnapshotSchema.parse(raw);
   const at = '2026-09-19T20:00:05Z';
   host.capabilities.docker = { status: 'ok', observedAt: at, completeness: 'complete', data: { apiVersion: '1.45', inventoryComplete: true, containers: [
-    { id: id('a'), name: 'media', image: 'example:1', createdAt: at, startedAt: at, state: 'running', health: 'no-healthcheck', restartCount: 0, cpuPercent: null, memoryBytes: 0, memoryLimitBytes: 1024, memoryKind: 'working-set', statsObservedAt: at },
+    { composeProject: 'media-stack', composeService: 'player', id: id('a'), name: 'media', image: 'example:1', createdAt: at, startedAt: at, state: 'running', health: 'no-healthcheck', restartCount: 0, cpuPercent: null, memoryBytes: 0, memoryLimitBytes: 1024, memoryKind: 'working-set', statsObservedAt: at },
     { id: id('b'), name: 'optional', image: 'example:1', createdAt: at, startedAt: null, state: 'exited', health: 'no-healthcheck', restartCount: 0, cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, memoryKind: 'unknown', statsObservedAt: null }
   ] } };
   return host;
@@ -24,6 +24,8 @@ describe('Docker snapshot state', () => {
     state.ingest(input, now);
     const optional = new HostQueries(database, true, () => true, () => now).containers();
     expect(optional).toMatchObject({ configured: true, total: 2, running: 1, expectedStopped: 0, unhealthy: 0 });
+    expect(optional.containers[0]).toMatchObject({ composeProject: 'media-stack', composeService: 'player' });
+    expect(optional.containers[1]?.composeProject).toBeUndefined();
     const expected = new HostQueries(database, true, () => true, () => now, undefined, [], undefined, new Set(['optional'])).containers();
     expect(expected.expectedStopped).toBe(1);
     expect(expected.containers[1]?.expectedRunning).toBe(true);
@@ -51,6 +53,8 @@ describe('Docker snapshot state', () => {
     const partial = structuredClone(first); partial.sequence += 2; dockerOk(partial).observedAt = '2026-09-19T20:00:35Z'; dockerOk(partial).completeness = 'partial'; dockerOk(partial).data.inventoryComplete = false; dockerOk(partial).data.containers = [];
     state.ingest(partial, now + 30_000);
     expect(new HostQueries(database, true, () => true, () => now + 30_000).containers()).toMatchObject({ inventoryComplete: false, total: null });
+    expect(new HostQueries(database, true, () => true, () => now + 30_000).containers().containers).toHaveLength(2);
+    expect(new HostQueries(database, true, () => true, () => now + 30_000).containers().observedAt).toBe(new Date(now).toISOString());
     expect(database.prepare("SELECT count(*) AS count FROM events WHERE kind LIKE 'container.%'").get()).toEqual({ count: 0 });
     database.close();
   });

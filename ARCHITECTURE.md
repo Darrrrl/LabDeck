@@ -13,6 +13,8 @@ flowchart LR
     A --> D[(Local SQLite)]
     H[Host collector: system + optional Docker/Tailscale] -->|atomic sanitized snapshots| F[Host snapshot directory]
     Q[SMART timer: fixed configured devices] -->|separate atomic snapshot| F
+    A -->|opt-in fixed short/extended request over local Unix socket| C[Host SMART control service]
+    C -->|allowlisted smartctl test start| X[Configured physical disk]
     F -->|read-only directory mount| A
 ```
 
@@ -55,7 +57,15 @@ Version routes under `/api/v1`. Planned authenticated GET endpoints:
 - `/events`: severity/integration filters and opaque cursor; default 50, maximum 100 entries, sorted by observed time plus ID.
 - `/settings`: sanitized configuration summary, versions, collector compatibility and retention diagnostics; read-only.
 
-Authentication is limited to `/session` POST/DELETE and `/session` GET. No integration mutation or arbitrary proxy route. Public `/health/live` exposes only process liveness; `/health/ready` only a boolean readiness result. Database failure affects readiness, upstream outages do not. Login uses a per-browser CSRF mechanism described in decision 002.
+Session creation/deletion is limited to `/session` POST/DELETE and `/session` GET; there is no arbitrary proxy route. Public `/health/live` exposes only process liveness; `/health/ready` only a boolean readiness result. Database failure affects readiness, upstream outages do not. Login uses a per-browser CSRF mechanism described in decision 002.
+
+The original observation-only route plan has the narrow opt-in exceptions below. All action routes require the owner session, exact origin and CSRF; the app receives only purpose-specific Unix sockets through the existing sanitized host mount.
+
+The opt-in `POST /api/v1/storage/smart-tests` is a fixed infrastructure action exception. It accepts only a configured disk ID and `short`/`extended`, requires an owner session, exact origin and CSRF token, and rejects stale/unreadable/non-ATA evidence. The server talks to a group-restricted Unix socket; only the root-owned host service resolves the device allowlist and invokes fixed `smartctl -t` arguments. See [decision 006](docs/decisions/006-web-started-smart-tests.md).
+
+Optional `POST /api/v1/containers/actions` extends the fixed-action pattern for allowlisted Docker targets. The app gets a separate group-restricted host socket, never Docker's socket. The host service permits only container or configured Compose project start/stop/restart and records safe outcomes. See [decision 007](docs/decisions/007-allowlisted-docker-control.md).
+
+`GET /api/v1/files/shares` reads cached status for up to four selected SMB/NFS mounts. Optional `POST /api/v1/files/operations` communicates with a separate unprivileged one-share host service for fixed browse, upload, rename, mkdir and nonrecursive delete operations. The app container does not mount the share. The service uses confined directory handles and a group-restricted socket; see [decision 008](docs/decisions/008-mounted-share-file-service.md).
 
 Browser polling: overview every 5s while visible, detail 10–30s, stop while hidden and refetch on focus. Server polling runs independently. REST is sufficient; SSE/WebSockets are deferred. All API responses containing personal or operational state use `Cache-Control: no-store`; client cache is memory-only.
 
@@ -136,3 +146,7 @@ Out-of-process host collection prevents a compromised web application from askin
 ## SMART self-test evidence add-on
 
 The existing fixed SMART read projects optional ATA test state, remaining percentage, duration estimates and five recent results. No migration or polling change is required. smartd scheduling is operator-managed on the host; the Storage page generates configuration previews only. See [decision 004](docs/decisions/004-host-owned-smart-tests.md).
+
+## Investigation add-ons
+
+[Decision 005](docs/decisions/005-monitoring-investigation-addons.md) adds cached problem list/detail reads, optional Compose identifiers, a bounded daily forecast baseline and one backup-status row in migration 005. Preferences are validated browser-local selections; operational API data remains memory-only. Restore clears backup status as well as sessions. No down-migration exists: keep the pre-upgrade database and matching image. The five additions do not imply completion of M9 live validation.

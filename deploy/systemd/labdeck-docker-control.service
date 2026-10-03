@@ -1,0 +1,32 @@
+[Unit]
+Description=LabDeck allowlisted Docker controls
+After=docker.service local-fs.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=labdeck-collector
+Group=labdeck-docker-control
+SupplementaryGroups=docker
+ExecStart=/usr/local/bin/labdeck-collector -config /etc/labdeck/collector.json -docker-control
+Restart=on-failure
+RestartSec=5s
+UMask=0007
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/labdeck-collector/public/docker-control
+MemoryMax=128M
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target

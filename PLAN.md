@@ -234,3 +234,25 @@ Consider storage forecast, optional Prowlarr statistics, safe artwork caching, p
 **Acceptance:** Six bounded wallboard widgets with fullscreen and detail navigation; desktop no-scroll target 1280×720; Docker search and attention/state filters retain optional-stop semantics; SMART progress/results preserve original evidence time; host-owned schedule preview clearly says it is not installed. No app infrastructure control route or new privileges.
 
 **Remaining:** Activate reviewed smartd schedules on Ubuntu, validate actual ATA hardware and installed smartmontools behavior. NVMe/SCSI self-test projection and in-app test initiation/schedule activation are outside this delivered slice.
+
+## Requested follow-up — web-started SMART tests (2026-10-01)
+
+**Status:** Implemented in the workspace; host deployment and hardware validation pending. Storage offers short and extended start buttons for current ATA evidence. The optional host control service accepts only allowlisted IDs and fixed test types via a group-restricted Unix socket. The app route requires owner session, exact origin and CSRF; browser data never supplies a device path. See [decision 006](docs/decisions/006-web-started-smart-tests.md), [host setup](docs/operations/smart-tests.md), and [validation evidence](docs/plans/smart-control-validation-report.md).
+
+**Validation remaining:** Run Go tests and vet with an installed Go toolchain; install and inspect the socket service on Ubuntu; verify an actual short and extended test and confirm the drive-reported results. No test was initiated on physical hardware by this change.
+
+## Requested investigation add-ons — 2026-09-27
+
+**Status:** Implementation and local fixture validation complete; live compatibility gates remain open. See [investigation validation](docs/plans/investigation-validation-report.md). M9 live release gates remain open.
+
+**Acceptance:** Compose project/service disclosures and full-group attention counts; conservative identity-aware storage forecasts with coverage and uncertainty; cached problem evidence/events/chart/service links; browser preferences for selected volume, range, filters, widget order and wallboard privacy; verified backup creation timestamps and restore guidance. Migration 005 retains bounded forecast history and clears backup status on restore.
+
+**Deferred:** External notification delivery is specified in the [post-v1 design](docs/plans/external-notifications.md); no sender is installed or enabled. Live Engine/Compose, Ubuntu install/restore, hardware and resource soak remain unverified for these additions.
+
+## Requested integration controls and files — 2026-10-03
+
+**Status:** Implemented in the workspace. Ubuntu deployment and live hardware, Docker Engine/Compose and NFS/SMB validation remain pending. The [Copilot handoff](docs/operations/copilot-integration-setup.md) and [validation evidence](docs/plans/integration-controls-validation-report.md) track the next gate.
+
+**Delivered:** SMART control preflight, persistent cooldown and socket ownership; allowlisted Docker container/Compose `start`, `stop`, `restart` with authenticated UI and bounded audit; optional SMB/NFS mount health with last-good capacity evidence; one-share file browsing, folder creation, resumable uploads up to 100 GiB, rename and nonrecursive delete. App containers receive only group-restricted sockets in the existing sanitized host mount. See [Docker decision](docs/decisions/007-allowlisted-docker-control.md), [file decision](docs/decisions/008-mounted-share-file-service.md) and [file setup](docs/operations/files-setup.md).
+
+**Validation remaining:** Run Go tests/vet with Go 1.24+; verify effective systemd/Compose permissions and action behavior on Ubuntu; test actual Docker targets, ATA SMART hardware, NFS/SMB mount failures and long upload resume. No real infrastructure action was performed by this repository change.

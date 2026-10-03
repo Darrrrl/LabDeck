@@ -1,0 +1,7 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_FILE_CONTROL_SOCKET_PATH: /run/labdeck-host/file-control/files.sock
+      LABDECK_FILE_CONTROL_SHARE_ID: ${LABDECK_FILE_CONTROL_SHARE_ID:?set the reviewed file share ID}
+    group_add:
+      - ${LABDECK_FILE_CONTROL_GID:?set the numeric labdeck-file-control GID}

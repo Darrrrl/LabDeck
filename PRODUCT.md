@@ -45,7 +45,7 @@ The first release is a narrow checkpoint, not a claim to meet every v1 feature. 
 
 ## MVP exclusions
 
-No restart/start/stop, shell, logs viewer, SMART self-tests, media management, search/grab, automatic remediation, browser credential editor, user administration, multi-user roles, public hosting, Kubernetes, Redis, Kafka, Grafana/Prometheus dependency, remote agent fleet, plugin marketplace, external notifications, recursive folder scans, or storage forecasts. A future action feature requires a separate design for authorization and auditing, not merely a confirmation modal.
+The original monitoring MVP excludes infrastructure actions, shell, logs viewer, media management, search/grab, automatic remediation, browser credential editor, user administration, multi-user roles, public hosting, Kubernetes, Redis, Kafka, Grafana/Prometheus dependency, remote agent fleet, plugin marketplace, external notifications, and recursive folder scans. The owner's later SMART, Docker, and one-share file requests are the documented opt-in exceptions below, with separate authorization and host boundaries.
 
 ## Quality targets
 
@@ -63,3 +63,15 @@ See [experience details](docs/product/experience.md) for page hierarchy and stat
 A dedicated `/wallboard` presents six bounded summary widgets for a server display, with fullscreen and detail links. The no-scroll target is a desktop viewport of at least 1280×720 at normal zoom; smaller screens reflow with scrolling for readability. Docker adds local name/image search and state/attention filters, separate state and healthcheck labels, and explicit running expectations.
 
 Storage adds ATA self-test evidence and a host smartd schedule preview. The exclusion of app-initiated self-tests remains: test initiation and schedule activation occur on the host. See [decision 004](docs/decisions/004-host-owned-smart-tests.md) and [setup](docs/operations/smart-tests.md).
+
+## Requested investigation additions (2026-09-27)
+
+The owner explicitly expanded the add-on scope to include Compose project/service grouping, conservative storage growth forecasts, current-problem investigation, browser dashboard preferences, and backup verification status. These additions supersede the earlier “Later” classification for Compose grouping, forecasts, and custom widget ordering only. They preserve observation-only infrastructure access. See [decision 005](docs/decisions/005-monitoring-investigation-addons.md) and [validation evidence](docs/plans/investigation-validation-report.md). External notifications remain [a post-v1 design](docs/plans/external-notifications.md), disabled and unimplemented.
+
+## Requested SMART test start (2026-10-01)
+
+The owner explicitly requested starting short and extended disk self-tests from Storage. This opt-in action is limited to configured ATA disks with fresh readable SMART evidence. It uses an authenticated CSRF-protected route and a fixed host Unix socket service; no device path reaches the browser or application container. See [decision 006](docs/decisions/006-web-started-smart-tests.md). The request acknowledgement means the host accepted the start command, not that the test completed or passed.
+
+## Requested Docker controls and file integration (2026-10-03)
+
+The owner expanded the scope to allowlisted container and Compose project start/stop/restart, mounted-share health, and one-share browsing, resumable upload, folder creation, rename and nonrecursive delete. Docker controls use a separate host service and never give the app the Docker socket. Compose `up` and `down` remain excluded. File actions use a separate unprivileged host service and never mount the share in the app. Recursive deletion and overwriting existing names are excluded. See [Docker decision 007](docs/decisions/007-allowlisted-docker-control.md) and [file decision 008](docs/decisions/008-mounted-share-file-service.md).

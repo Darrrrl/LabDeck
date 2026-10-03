@@ -86,6 +86,23 @@ ALTER TABLE poll_state ADD COLUMN safe_error_code TEXT;
 CREATE TABLE event_dedupe (dedupe_key TEXT PRIMARY KEY, observed_at INTEGER NOT NULL);
 INSERT OR IGNORE INTO event_dedupe(dedupe_key, observed_at) SELECT dedupe_key, observed_at FROM events;
 CREATE INDEX event_dedupe_observed_at ON event_dedupe(observed_at);
+`,
+`
+CREATE TABLE filesystem_forecast_days (
+ filesystem_id TEXT NOT NULL, day INTEGER NOT NULL, identity TEXT NOT NULL,
+ total_bytes REAL NOT NULL, used_bytes REAL NOT NULL, observed_at INTEGER NOT NULL,
+ hours_mask INTEGER NOT NULL, PRIMARY KEY(filesystem_id, day)
+);
+CREATE TABLE backup_status (
+ id INTEGER PRIMARY KEY CHECK(id=1), successful_at INTEGER NOT NULL, verified_at INTEGER NOT NULL
+);
+`,
+`
+CREATE TABLE action_audit (
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_id TEXT NOT NULL, action TEXT NOT NULL,
+ requested_at INTEGER NOT NULL, completed_at INTEGER, result TEXT NOT NULL
+);
+CREATE INDEX action_audit_recent ON action_audit(requested_at DESC);
 `
 ];
 

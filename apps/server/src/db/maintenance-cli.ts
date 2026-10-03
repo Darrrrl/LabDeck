@@ -13,7 +13,7 @@ function verify(database: Database.Database): void {
   if (integrity.length !== 1 || integrity[0]?.integrity_check !== 'ok') throw new Error('SQLite integrity check failed');
   if ((database.pragma('foreign_key_check') as unknown[]).length) throw new Error('SQLite foreign key check failed');
   const versions = database.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[];
-  if (!versions.length || versions.some(({ version }) => !Number.isSafeInteger(version) || version < 1 || version > 4)) throw new Error('unsupported database schema');
+  if (!versions.length || versions.some(({ version }) => !Number.isSafeInteger(version) || version < 1 || version > 6)) throw new Error('unsupported database schema');
 }
 
 export async function maintainDatabase(mode: 'backup' | 'restore', source: string, target: string): Promise<void> {
@@ -33,11 +33,24 @@ export async function maintainDatabase(mode: 'backup' | 'restore', source: strin
       if (mode === 'restore') {
         copy.pragma('journal_mode = DELETE');
         copy.prepare('DELETE FROM sessions').run();
+        if (copy.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='backup_status'").get()) copy.prepare('DELETE FROM backup_status').run();
         verify(copy);
       }
     } finally { copy.close(); }
     chmodSync(staged, 0o600);
     linkSync(staged, output); // atomic create; never overwrites an existing target
+    if (mode === 'backup') {
+      // Record only after verification and publication. No target path is stored.
+      const status = new Database(input, { fileMustExist: true });
+      try {
+        status.pragma('busy_timeout = 5000');
+        if (status.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='backup_status'").get()) {
+          const at = Date.now();
+          status.prepare('INSERT INTO backup_status(id,successful_at,verified_at) VALUES (1,?,?) ON CONFLICT(id) DO UPDATE SET successful_at=excluded.successful_at,verified_at=excluded.verified_at').run(at, at);
+        }
+      } catch { throw new Error('backup file verified and created, but recording backup status failed'); }
+      finally { status.close(); }
+    }
   } finally { rmSync(temporaryDirectory, { recursive: true, force: true }); }
 }
 

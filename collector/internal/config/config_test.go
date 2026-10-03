@@ -36,3 +36,14 @@ func TestSmartAllowlistRejectsTraversalTypeAndSharedOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestShareMayAlsoBeMonitoredAsFilesystemButRejectsDuplicateShare(t *testing.T) {
+	value := Config{HostID: "server", OutputDirectory: "/tmp/output", Filesystems: []Filesystem{{ID: "media", Path: "/srv/media"}}, Interfaces: []Entity{{ID: "lan", Name: "eth0"}}, FileShares: []Filesystem{{ID: "share", Path: "/srv/media"}}}
+	if err := value.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	value.FileShares = append(value.FileShares, Filesystem{ID: "share-two", Path: "/srv/media"})
+	if err := value.Validate(); err == nil {
+		t.Fatal("duplicate share path accepted")
+	}
+}

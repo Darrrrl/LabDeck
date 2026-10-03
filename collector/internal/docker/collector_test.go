@@ -43,7 +43,7 @@ func TestProjectionAndAllowedPaths(t *testing.T) {
 		case "/version":
 			return 200, `{"ApiVersion":"1.50","MinAPIVersion":"1.40"}`
 		case "/v1.45/containers/json":
-			return 200, fmt.Sprintf(`[{"Id":"%s","Names":["/media"],"Image":"example:1","State":"running","Created":1700000000,"Labels":{"secret":"CANARY_SECRET"}}]`, id)
+			return 200, fmt.Sprintf(`[{"Id":"%s","Names":["/media"],"Image":"example:1","State":"running","Created":1700000000,"Labels":{"secret":"CANARY_SECRET","com.docker.compose.project":"media-stack","com.docker.compose.service":"jellyfin"}}]`, id)
 		case "/v1.45/containers/" + id + "/json":
 			return 200, `{"RestartCount":2,"State":{"Status":"running","StartedAt":"2026-09-24T10:00:00Z","Health":{"Status":"healthy","Log":[{"Output":"CANARY_SECRET"}]}},"Config":{"Env":["PASSWORD=CANARY_SECRET"]}}`
 		case "/v1.45/containers/" + id + "/stats":
@@ -63,6 +63,9 @@ func TestProjectionAndAllowedPaths(t *testing.T) {
 	item := result.Data.Containers[0]
 	if item.CPUPercent == nil || *item.CPUPercent != 80 || item.MemoryBytes == nil || *item.MemoryBytes != 800 || item.MemoryKind != "working-set" {
 		t.Fatalf("bad stats: %#v", item)
+	}
+	if item.ComposeProject == nil || *item.ComposeProject != "media-stack" || item.ComposeService == nil || *item.ComposeService != "jellyfin" {
+		t.Fatal("Compose labels missing")
 	}
 	encoded, _ := json.Marshal(result)
 	if strings.Contains(string(encoded), "CANARY_SECRET") {
@@ -118,5 +121,16 @@ func TestUnsupportedAndMissingStats(t *testing.T) {
 	}
 	if cpuPercent(stats{}) != nil {
 		t.Fatal("first sample must be unknown")
+	}
+}
+
+func TestComposeLabelValidation(t *testing.T) {
+	for _, value := range []string{"", "invalid space", "../path", strings.Repeat("a", 129)} {
+		if composeName(value) != nil {
+			t.Errorf("accepted invalid label %q", value)
+		}
+	}
+	if composeName("web-1.frontend") == nil {
+		t.Fatal("rejected safe Compose name")
 	}
 }

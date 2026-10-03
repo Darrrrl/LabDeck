@@ -8,6 +8,7 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
 const timestampSchema = z.iso.datetime({ offset: true });
 const freshnessSchema = z.enum(['fresh', 'stale', 'never']);
+const bytesSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const overallStatusSchema = z.enum(['healthy', 'warning', 'critical', 'monitoring-incomplete']);
 const metricPointSchema = z.object({ at: timestampSchema, value: z.number(), coverage: z.number().min(0).max(1) });
 export const historyRangeSchema = z.enum(['1h', '24h', '7d', '30d', '400d']);
@@ -40,6 +41,8 @@ const smartDiskSchema = z.object({
   scsi: z.object({ grownDefects: smartCounterSchema, readUncorrected: smartCounterSchema }).nullable()
 });
 const smartSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(), failed: z.number().int().nonnegative(), warning: z.number().int().nonnegative(), unavailable: z.number().int().nonnegative() });
+export const smartTestRequestSchema = z.object({ diskId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), type: z.enum(['short', 'extended']) }).strict();
+export const smartTestResponseSchema = z.object({ status: z.enum(['started', 'rate-limited', 'already-running', 'device-unavailable', 'rejected']) });
 const networkDataSchema = z.object({ id: z.string(), name: z.string(), receiveBytesPerSecond: z.number().nullable(), transmitBytesPerSecond: z.number().nullable() });
 const blockIoDataSchema = z.object({ id: z.string(), name: z.string(), readBytesPerSecond: z.number().nullable(), writeBytesPerSecond: z.number().nullable() });
 export const mediaSessionSchema = z.object({
@@ -57,6 +60,8 @@ const mediaSummarySchema = z.object({
 });
 const connectionSchema = z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']);
 const dockerContainerSchema = z.object({
+  composeProject: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/).nullable().optional(),
+  composeService: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/).nullable().optional(),
   id: z.string().regex(/^[a-f0-9]{64}$/), name: z.string().max(128), image: z.string().max(160),
   createdAt: timestampSchema.nullable(), startedAt: timestampSchema.nullable(),
   state: z.enum(['created', 'running', 'paused', 'restarting', 'exited', 'dead', 'unknown']),
@@ -67,8 +72,14 @@ const dockerContainerSchema = z.object({
 const containerSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(),
   inventoryComplete: z.boolean().nullable(), total: z.number().int().nonnegative().nullable(), running: z.number().int().nonnegative().nullable(),
   unhealthy: z.number().int().nonnegative().nullable(), expectedStopped: z.number().int().nonnegative().nullable() });
-export const containersResponseSchema = containerSummarySchema.extend({ containers: z.array(dockerContainerSchema.extend({ expectedRunning: z.boolean() })).max(100) });
+export const containersResponseSchema = containerSummarySchema.extend({ controls: z.object({ available: z.boolean(), containers: z.array(z.string()).max(100), projects: z.array(z.string()).max(20) }).optional(), containers: z.array(dockerContainerSchema.extend({ expectedRunning: z.boolean() })).max(100) });
 export type ContainersResponse = z.infer<typeof containersResponseSchema>;
+const fileShareSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/), path: z.string().max(512), kind: z.enum(['nfs', 'nfs4', 'cifs', 'smb3', 'unknown']), state: z.enum(['ok', 'offline', 'unsupported', 'timeout', 'read-failed']), observedAt: timestampSchema, totalBytes: bytesSchema.nullable(), availableBytes: bytesSchema.nullable() });
+export const fileSharesResponseSchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), shares: z.array(fileShareSchema.extend({ evidenceAt: timestampSchema.nullable() })).max(4), control: z.object({ available: z.boolean(), shareId: z.string().nullable() }).optional() });
+export type FileSharesResponse = z.infer<typeof fileSharesResponseSchema>;
+export const fileOperationReplySchema = z.object({ ok: z.boolean(), error: z.string().max(64).optional(), entries: z.array(z.object({ name: z.string().min(1).max(255), kind: z.enum(['file', 'directory']), size: bytesSchema.nullable(), modifiedAt: z.number().int().nonnegative() })).max(200).optional(), nextCursor: z.string().max(255).nullable().optional(), uploadId: z.string().regex(/^[a-f0-9]{32}$/).optional(), offset: z.number().int().min(0).max(100 * 1024 ** 3).optional(), status: z.literal('completed').optional() }).strict();
+export const dockerActionRequestSchema = z.object({ kind: z.enum(['container', 'project']), id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/), action: z.enum(['start', 'stop', 'restart']) }).strict();
+export const dockerActionResponseSchema = z.object({ id: z.string().uuid(), status: z.enum(['completed', 'rejected']) });
 const tailscalePeerSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), name: z.string().max(128), ips: z.array(z.ipv4().or(z.ipv6())).max(2), online: z.boolean(), lastSeen: timestampSchema.nullable() });
 const tailscaleSummarySchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), errorCode: z.string().nullable(), backendState: z.string().nullable(), inventoryComplete: z.boolean().nullable(), total: z.number().int().nonnegative().nullable(), online: z.number().int().nonnegative().nullable() });
 export const networkResponseSchema = tailscaleSummarySchema.extend({ version: z.string().nullable(), selfName: z.string().nullable(), selfIPs: z.array(z.ipv4().or(z.ipv6())).max(2), peers: z.array(tailscalePeerSchema).max(250) });
@@ -109,7 +120,9 @@ export const sessionResponseSchema = z.discriminatedUnion('authenticated', [
 ]);
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 
+export const backupStatusSchema = z.object({ lastSuccessfulAt: timestampSchema.nullable(), integrityVerifiedAt: timestampSchema.nullable() });
 export const settingsResponseSchema = z.object({
+  backup: backupStatusSchema.optional(),
   integrations: z.array(z.object({ id: z.string(), name: z.string(), connection: z.enum(['unknown', 'reachable', 'unreachable', 'auth-error']), freshness: freshnessSchema, lastSuccessfulRefreshAt: timestampSchema.nullable(), safeErrorCode: z.string().nullable() })),
   authentication: z.literal('configured'), demoMode: z.boolean(), version: z.string(),
   hostCollector: z.object({ configured: z.boolean(), historyAvailable: z.boolean(), message: z.string() }),
@@ -124,7 +137,15 @@ export const systemResponseSchema = z.object({
 });
 export type SystemResponse = z.infer<typeof systemResponseSchema>;
 
-export const storageResponseSchema = z.object({ configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), filesystems: z.array(filesystemDataSchema), history: z.record(z.string(), z.array(metricPointSchema)), smart: smartSummarySchema.extend({ disks: z.array(smartDiskSchema).max(16) }) });
+export const storageForecastSchema = z.object({
+  status: z.enum(['estimated', 'insufficient', 'stale', 'nonpositive', 'unstable', 'beyond-horizon', 'below-threshold']),
+  observedAt: timestampSchema, windowStart: timestampSchema, windowEnd: timestampSchema,
+  validDays: z.number().int().nonnegative(), coverage: z.number().min(0).max(1),
+  thresholdBytes: z.number().nonnegative(), growthBytesPerDay: z.number().nullable(),
+  estimatedAt: timestampSchema.nullable(), earliestAt: timestampSchema.nullable(), latestAt: timestampSchema.nullable()
+});
+export type StorageForecast = z.infer<typeof storageForecastSchema>;
+export const storageResponseSchema = z.object({ forecasts: z.record(z.string(), storageForecastSchema).optional(), configured: z.boolean(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(), filesystems: z.array(filesystemDataSchema), history: z.record(z.string(), z.array(metricPointSchema)), smart: smartSummarySchema.extend({ testControlAvailable: z.boolean().optional(), disks: z.array(smartDiskSchema).max(16) }) });
 export type StorageResponse = z.infer<typeof storageResponseSchema>;
 
 export const eventsResponseSchema = z.object({ events: z.array(eventSchema).max(100), nextCursor: z.number().int().nullable() });
@@ -140,7 +161,6 @@ export type MediaResponse = z.infer<typeof mediaResponseSchema>;
 export const downloadsResponseSchema = z.object({ configured: z.boolean(), services: z.array(downloadServiceSchema).max(2), indexers: indexerHealthSchema.nullable() });
 export type DownloadsResponse = z.infer<typeof downloadsResponseSchema>;
 
-const bytesSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const rateSchema = z.number().nonnegative().finite().nullable();
 const capabilitySchema = <T extends z.ZodType>(data: T) => z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.literal('complete'), data }),
@@ -174,6 +194,7 @@ export const hostCollectorSnapshotSchema = z.object({
       z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.enum(['complete', 'partial']), data: z.object({ apiVersion: z.string().regex(/^1\.\d{2}$/), inventoryComplete: z.boolean(), containers: z.array(dockerContainerSchema).max(100) }) }),
       z.object({ status: z.literal('error'), observedAt: timestampSchema, completeness: z.literal('complete'), errorCode: z.enum(['read-failed']) })
     ]).optional(),
+    fileShares: capabilitySchema(z.array(fileShareSchema).max(4)).optional(),
     tailscale: z.discriminatedUnion('status', [
       z.object({ status: z.literal('ok'), observedAt: timestampSchema, completeness: z.enum(['complete', 'partial']), data: z.object({ version: z.string().min(1).max(128), backendState: z.string().min(1).max(32), selfName: z.string().max(128), selfIPs: z.array(z.ipv4().or(z.ipv6())).max(2), inventoryComplete: z.boolean(), peers: z.array(tailscalePeerSchema).max(250) }) }),
       z.object({ status: z.literal('error'), observedAt: timestampSchema, completeness: z.literal('complete'), errorCode: z.enum(['read-failed', 'permission-denied', 'invalid-response']) })
@@ -186,3 +207,26 @@ export type HostCollectorSnapshot = z.infer<typeof hostCollectorSnapshotSchema>;
 export const smartSnapshotSchema = z.object({ schemaVersion: z.literal('1'), generatedAt: timestampSchema,
   disks: z.array(smartDiskSchema.omit({ evidenceAt: true, temperatureWarning: true })).max(16) }).strict();
 export type SmartSnapshot = z.infer<typeof smartSnapshotSchema>;
+
+export const problemSchema = z.object({
+  id: z.string().regex(/^[a-f0-9]{24}$/), title: z.string().max(200), severity: z.enum(['warning', 'critical']),
+  instanceId: z.string(), entityId: z.string().nullable(), freshness: freshnessSchema, observedAt: timestampSchema.nullable(),
+  evidence: z.array(z.string().max(500)).max(8), detailPath: z.enum(['/system', '/storage', '/containers', '/media', '/downloads', '/network', '/settings']),
+  browserUrl: z.url().nullable()
+});
+export type Problem = z.infer<typeof problemSchema>;
+export const problemsResponseSchema = z.object({ problems: z.array(problemSchema).max(200) });
+export const problemDetailResponseSchema = z.object({
+  problem: problemSchema,
+  events: z.array(eventSchema.extend({ instanceId: z.string(), origin: z.enum(['upstream', 'observed', 'threshold']), occurredAt: timestampSchema.nullable() })).max(10),
+  chart: z.object({ label: z.string(), unit: z.enum(['bytes', 'percent']), points: z.array(metricPointSchema).max(1000) }).nullable()
+});
+export type ProblemDetailResponse = z.infer<typeof problemDetailResponseSchema>;
+
+export const widgetIds = ['system', 'storage', 'docker', 'watching', 'downloads', 'network'] as const;
+export const dashboardPreferencesSchema = z.object({
+  version: z.literal(1), selectedVolume: z.string().max(256), historyRange: historyRangeSchema,
+  containerSearch: z.string().max(128), containerFilter: z.enum(['all', 'attention', 'running', 'stopped']),
+  hideWatchingTitles: z.boolean(), widgetOrder: z.array(z.enum(widgetIds)).length(6).refine((items) => new Set(items).size === 6)
+}).strict();
+export type DashboardPreferences = z.infer<typeof dashboardPreferencesSchema>;

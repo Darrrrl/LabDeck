@@ -52,4 +52,12 @@ Wallboard hides the navigation rail, retains an Overview exit link and offers br
 
 Docker search matches name/image and combines with All, Needs attention, Running and Not running filters. Optional stopped containers stay out of Needs attention unless unhealthy. State, healthcheck and running expectations are separate concepts.
 
-Storage separates SMART overall health from self-test results and labels disk lifetime hours explicitly. Schedule previews never appear installed. Follow the [host setup](../operations/smart-tests.md) to activate one.
+Storage separates SMART overall health from self-test results and labels disk lifetime hours explicitly. Schedule previews never appear installed. The optional Start buttons appear only for ATA disks when the control service is configured; they require current readable evidence and report command acceptance separately from test outcome. Follow the [host setup](../operations/smart-tests.md) to activate schedules or web starts.
+
+## Delivered investigation add-ons
+
+The later forecast specification above is refined by [decision 005](../decisions/005-monitoring-investigation-addons.md): the delivered estimate targets 10% available space rather than complete exhaustion, uses a fixed 30 completed UTC day window, and explains unavailable/unstable/stale results. Forecasts do not replace current capacity warnings.
+
+Overview lists clickable current problems above reordered widgets. Problem detail shows evidence, provenance, related retained events and a timestamped chart where a relevant metric already exists; gaps and a table alternative remain visible. Docker groups projects and services with expandable native disclosures, full-group attention counts and filtered shown counts. Missing labels are explicit.
+
+Settings provides keyboard-operated widget ordering, reset, wallboard title privacy, and backup creation-time verification with restore guidance. Volume, range and container filters persist per browser. The wallboard privacy option hides rendered titles and title tooltips while leaving session counts and status visible.
