@@ -2,11 +2,11 @@
 
 ## Visual hierarchy
 
-Use a near-black neutral canvas, slightly elevated surfaces, fine borders, system typography (including the native macOS system font), tabular numerals, and a 4px spacing scale. Body text 14–16px; captions no smaller than 12px. One restrained accent for interaction; green/amber/red reserved for status, always paired with words/icons. Avoid gradients, decorative gauges, repeated oversized metric tiles and animated background effects.
+The owner-requested 90s desktop revamp uses muted sage desktop colors, warm gray panels, navy window headers, subtle raised/inset borders and squared corners. System sans-serif body text pairs with native monospace headings and metric values; no external fonts or decorative motion are required. Follow the operating system's dark preference with a matching dark palette. Status colors always accompany words/icons. Keyboard focus remains explicit.
 
-At 1440px: a 208px navigation rail, compact page header and status strip, then a 12-column content grid. Storage occupies roughly seven columns and Currently Watching five. Service summaries form compact rows below, with recent activity spanning the remaining width. Use whitespace and typography to separate priority, not a border around every number.
+At 1440px: a 220px navigation rail, compact window-style page header and status strip, then a six-cell metric strip and two-column widget grid. Saved widget ordering controls both DOM and visual order; paired cards follow that order rather than forcing storage and playback ahead of user preferences. Current problems remain above widgets. All service data and freshness remain sourced from existing cached APIs.
 
-At 768px collapse navigation and stack major sections into two/one columns; at 390px a single column preserves headline, warnings, storage and watching priority. Tables allow focused horizontal overflow only inside the table or become labeled rows; page-level horizontal scrolling fails acceptance. Menus/drawers preserve keyboard focus and escape behavior. Respect reduced motion; refreshes must not steal focus or reorder rows under a pointer.
+At 768px use a horizontally scrollable bottom taskbar with visible destination labels and stack major sections into two/one columns; at 390px a single column preserves headline, warnings, storage and watching priority. Tables allow focused horizontal overflow only inside the table or become labeled rows; page-level horizontal scrolling fails acceptance. Menus/drawers preserve keyboard focus and escape behavior. Respect reduced motion; refreshes must not steal focus or reorder rows under a pointer.
 
 ## Navigation and pages
 

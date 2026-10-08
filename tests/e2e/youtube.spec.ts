@@ -1,5 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+
+// Reuse authentication within this worker so UI cases do not exhaust the login limiter.
+let cookies: Awaited<ReturnType<BrowserContext['cookies']>> | undefined;
+async function signIn(page: Page) {
+  if (cookies) await page.context().addCookies(cookies);
+  await page.goto('/');
+  if (!cookies) {
+    await page.getByLabel('Owner password').fill('labdeck-test-password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+    cookies = await page.context().cookies();
+  }
+}
 
 for (const width of [1440, 390]) {
   test(`YouTube preview confirmation and retry at ${width}px`, async ({ page }) => {
@@ -18,10 +31,7 @@ for (const width of [1440, 390]) {
       else if (command.action === 'cancel') jobs = [{ ...jobs[0], state: 'cancelled' }];
       await route.fulfill({ status: 202, json: { ok: true, id: identity } });
     });
-    await page.goto('/');
-    await page.getByLabel('Owner password').fill('labdeck-test-password');
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+    await signIn(page);
     await page.goto('/downloads');
     await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption('music');
     await page.getByLabel('YouTube video or playlist URL').fill('https://youtu.be/abcdefghijk');
@@ -63,10 +73,7 @@ for (const kind of ['movie', 'tv'] as const) {
       if (command.action === 'submit') job = { ...job, state: 'queued' };
       await route.fulfill({ status: 202, json: { ok: true, id: identity } });
     });
-    await page.goto('/');
-    await page.getByLabel('Owner password').fill('labdeck-test-password');
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+    await signIn(page);
     await page.goto('/downloads');
     await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption(kind);
     await page.getByLabel(kind === 'tv' ? 'YouTube playlist URL' : 'YouTube video or playlist URL').fill(source);

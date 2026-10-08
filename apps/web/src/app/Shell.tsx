@@ -15,7 +15,7 @@ export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () 
     <div className={`app-shell${pathname === '/wallboard' ? ' app-shell--wallboard' : ''}`}>
       {demoMode ? <div className="demo-banner" role="status">Fixture demo mode · loopback access only</div> : null}
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true"><Activity size={18} /></span><span>LabDeck</span></div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><Activity size={18} /></span><span>LabDeck<small>Personal server desktop</small></span></div>
         <nav aria-label="Primary navigation">
           <NavLink to="/" end><LayoutDashboard aria-hidden="true" size={17} /><span>Overview</span></NavLink>
           <NavLink to="/wallboard"><MonitorCog aria-hidden="true" size={17} /><span>Wallboard</span></NavLink>
@@ -29,6 +29,7 @@ export function Shell({ demoMode, onLogout }: { demoMode: boolean; onLogout: () 
           <NavLink to="/events"><ListTree aria-hidden="true" size={17} /><span>Events</span></NavLink>
           <NavLink to="/settings"><Settings aria-hidden="true" size={17} /><span>Settings</span></NavLink>
         </nav>
+        <div className="sidebar-caption" aria-hidden="true">YOUR LAB. AT A GLANCE.</div>
         <button className="quiet-button" type="button" onClick={() => { void onLogout(); }}><LogOut aria-hidden="true" size={16} />Sign out</button>
       </aside>
       <div className="content"><Outlet /></div>

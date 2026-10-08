@@ -26,3 +26,7 @@ M9 release validation is in progress. This report records a first M9.1 fixture U
 - Complete the M9.1 review of every page in fresh, empty, stale, and error states, including manual keyboard and contrast inspection across those combinations. Automated checks cover representative fixture states, not every permutation.
 - M9.2 requires a fresh Ubuntu install, service-only and full-collector permission matrix, amd64/arm64 images, upgrade and restore drill, and exact supported-version/hardware records.
 - M9.3 requires the reference-host 24-hour soak, measured latency/CPU/RSS/SQLite budgets, ingress/log/request audit, release notes, and known limitations. No soak or live integration was run in this pass.
+
+## Owner-requested retro desktop revamp — 2026-10-08
+
+The shared UI now uses muted desktop colors, beveled panels, window-style headers, visible mobile navigation labels and automatic dark appearance. The [review and validation report](retro-design-review.md) records implementation, browser evidence and prioritized remaining product gaps. This extends M9.1 fixture evidence; it does not close the installation or live soak gates.

@@ -6,7 +6,7 @@ import AxeBuilder from '@axe-core/playwright';
 let authenticatedCookies: Awaited<ReturnType<BrowserContext['cookies']>> | undefined;
 async function expectAccessible(page: Page) {
   const audit = await new AxeBuilder({ page }).analyze();
-  expect(audit.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)).toEqual([]);
+  expect(audit.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => `${node.target.join(' ')} ${node.failureSummary}`).join(', ')}`)).toEqual([]);
 }
 async function signIn(page: Page) {
   if (authenticatedCookies) await page.context().addCookies(authenticatedCookies);
@@ -66,10 +66,13 @@ test('core pages have no automated accessibility violations', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expectAccessible(page);
   await signIn(page);
-  for (const path of ['/', '/system', '/storage', '/media', '/downloads', '/containers', '/network', '/events', '/settings']) {
-    await page.goto(path);
-    await expect(page.getByRole('main')).toBeVisible();
-    await expectAccessible(page);
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const path of ['/', '/system', '/storage', '/media', '/downloads', '/containers', '/network', '/files', '/events', '/settings']) {
+      await page.goto(path);
+      await expect(page.getByRole('main')).toBeVisible();
+      await expectAccessible(page);
+    }
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -123,6 +126,7 @@ test('storage selects a filesystem and separates stale disk evidence on a phone'
 
 test('overview and media answer first-release questions across mixed states', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/v1/problems', async (route) => route.fulfill({ json: { problems: [] } }));
   const observedAt = new Date().toISOString();
   const sessions = [
     { id: 's1', userName: 'Mira', title: 'Example Station', subtitle: 'Fresh Signals', mediaId: 'm1', paused: false, positionSeconds: 900, durationSeconds: 3600, progressRatio: .25, playbackMode: 'direct-play', bitrateBitsPerSecond: null, bitrateSource: null },
@@ -147,6 +151,17 @@ test('overview and media answer first-release questions across mixed states', as
   expect(await page.locator('.metric-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
   await expectAccessible(page);
   await page.screenshot({ path: 'test-results/m9-overview-390.png', fullPage: true });
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/retro-overview-${viewport.width}.png`, fullPage: true });
+  }
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectAccessible(page);
+  await page.screenshot({ path: 'test-results/retro-overview-dark.png', fullPage: true });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Overview' }).locator('span')).toBeInViewport();
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Media' }).click();
   await expect(page.getByRole('heading', { name: 'Jellyfin' })).toBeVisible();
   await expect(page.getByText('Mira · Playing · Direct play')).toBeVisible();

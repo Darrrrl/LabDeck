@@ -207,7 +207,7 @@ For each handoff record: completed task IDs, code/contract changes, actual comma
 
 ## M9 — monitoring v1 release
 
-**Status:** M9.1 fixture UI review in progress; M9.2–M9.3 and all required live release gates pending. See [v1 validation report](docs/plans/v1-validation-report.md).
+**Status:** M9.1 fixture UI review in progress, including the owner-requested 90s desktop revamp ([review and evidence](docs/plans/retro-design-review.md)); M9.2–M9.3 and all required live release gates pending. See [v1 validation report](docs/plans/v1-validation-report.md).
 
 **Goal:** Ship a small, coherent, documented monitoring product with proven installation and failure behavior.
 
