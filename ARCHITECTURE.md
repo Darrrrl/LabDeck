@@ -4,6 +4,8 @@ Status: accepted baseline, updated for the M8 fixture implementation on 2026-09-
 
 ## System shape
 
+The opt-in YouTube downloader adds a separate unprivileged Python host worker, its own versioned local SQLite job database and fixed FFmpeg/yt-dlp commands. LabDeck receives only its Unix socket through the sanitized host mount; it never mounts libraries. A five-second server timer caches normalized state for browser reads. Owner/CSRF-protected commands prepare, confirm, cancel and explicitly retry frozen manifests. See [decision 009](docs/decisions/009-youtube-downloader.md) and [installation](docs/integrations/youtube-downloader.md); worker state/media are excluded from LabDeck database backup.
+
 Use a modular monolith: a React/TypeScript frontend and a TypeScript Fastify backend shipped as one container, with SQLite on a local persistent volume. A small Go host collector runs under systemd outside Docker. It is a privilege boundary, not a general agent platform. It publishes files; it has no listening socket or command API.
 
 ```mermaid

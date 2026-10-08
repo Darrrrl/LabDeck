@@ -1,0 +1,7 @@
+{
+  "roots": { "movie": "/srv/media/Movies", "tv": "/srv/media/TV", "music": "/srv/media/Music" },
+  "stateDirectory": "/var/lib/labdeck-youtube",
+  "socketPath": "/var/lib/labdeck-collector/public/youtube-control/worker.sock",
+  "ytDlp": "/opt/labdeck-youtube/bin/yt-dlp",
+  "ffmpeg": "/usr/bin/ffmpeg"
+}

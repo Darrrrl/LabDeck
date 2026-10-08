@@ -1,0 +1,18 @@
+# Replace 991 with the numeric UID of labdeck-youtube before installing.
+# This additive table does not flush other host firewall rules.
+table inet labdeck_youtube {
+  chain output {
+    type filter hook output priority 0; policy accept;
+    meta skuid 991 jump youtube_only
+  }
+  chain youtube_only {
+    fib daddr type local drop
+    ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4 } drop
+    ip6 daddr != 2000::/3 drop
+    ip6 daddr { 2001::/23, 2001:db8::/32, 2002::/16, 3fff::/20 } drop
+    ip daddr { 1.1.1.1, 1.0.0.1 } udp dport 53 accept
+    ip daddr { 1.1.1.1, 1.0.0.1 } tcp dport 53 accept
+    tcp dport { 80, 443 } accept
+    drop
+  }
+}

@@ -6,6 +6,7 @@ import { Status } from '../../components/Status.js';
 
 export function DownloadsPage() { const query = useQuery({ queryKey: ['downloads'], queryFn: getDownloads, refetchInterval: 15_000, refetchIntervalInBackground: false }); return <main id="main-content" tabIndex={-1}>
   <header className="page-header"><div><p className="eyebrow">DOWNLOADS</p><h1>Managed downloads</h1></div></header>
+  <YoutubePanel />
   {query.isPending ? <div className="panel loading-panel"><span className="skeleton" /></div> : null}{query.isError ? <div className="notice" role="alert"><Status tone="critical">Unavailable</Status><h2>Download state could not be loaded</h2></div> : null}
   {query.data && !query.data.configured ? <section className="empty-state"><Status tone="unknown">Not configured</Status><h2>No download services configured</h2><p>Add Sonarr, Radarr, or Prowlarr through server-side configuration.</p></section> : null}
   {query.data?.indexers ? <section className="panel download-service" aria-labelledby="indexer-title"><div className="section-heading"><div><h2 id="indexer-title">Prowlarr indexers</h2><p>{query.data.indexers.errorCode ? `Health refresh failed (${query.data.indexers.errorCode}); showing last-good data from ${relativeTime(query.data.indexers.observedAt)}.` : `Observed ${relativeTime(query.data.indexers.observedAt)}.`}</p></div><div className="summary-action"><Status tone={query.data.indexers.connection !== 'reachable' || query.data.indexers.freshness !== 'fresh' ? 'warning' : (query.data.indexers.failingTotal ?? 0) > 0 || query.data.indexers.warnings.some((item) => item.severity !== 'notice') ? 'warning' : 'healthy'}>{query.data.indexers.connection === 'auth-error' ? 'Credentials rejected' : query.data.indexers.freshness === 'stale' ? 'Stale' : query.data.indexers.connection === 'reachable' ? 'Reachable' : query.data.indexers.connection}</Status><a className="text-link" href={query.data.indexers.browserUrl ?? undefined} target="_blank" rel="noreferrer">Open Prowlarr<ExternalLink size={14} /></a></div></div>
@@ -22,3 +23,4 @@ export function DownloadsPage() { const query = useQuery({ queryKey: ['downloads
   </section>)}
   </main>; }
 function Metric({ label, value }: { label: string; value: number | null }) { return <div><span>{label}</span><strong>{value === null ? '—' : value.toLocaleString()}</strong></div>; }
+import { YoutubePanel } from './YoutubePanel';

@@ -1,0 +1,41 @@
+[Unit]
+Description=LabDeck optional YouTube library downloader
+After=network-online.target local-fs.target nftables.service
+Wants=network-online.target
+Requires=nftables.service
+
+[Service]
+Type=simple
+User=labdeck-youtube
+Group=labdeck-youtube-control
+SupplementaryGroups=labdeck-youtube-readers
+ExecStartPre=+/usr/sbin/nft list table inet labdeck_youtube
+ExecStart=/usr/bin/python3 /usr/local/lib/labdeck/labdeck_youtube.py --config /etc/labdeck/youtube.json
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+IPAddressDeny=localhost link-local multicast
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 0.0.0.0/8 192.0.0.0/24 198.18.0.0/15 240.0.0.0/4 fc00::/7
+BindReadOnlyPaths=/etc/labdeck/youtube-resolv.conf:/etc/resolv.conf
+ReadWritePaths=/var/lib/labdeck-youtube /var/lib/labdeck-collector/public/youtube-control
+# Required root-owned drop-in: ReadWritePaths for exactly three configured libraries.
+MemoryMax=2G
+TasksMax=64
+LimitNOFILE=256
+LimitFSIZE=107374182400
+
+[Install]
+WantedBy=multi-user.target

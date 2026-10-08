@@ -96,6 +96,12 @@ Keep a separate dedupe/cursor baseline long enough that event retention cannot c
 
 ## Adding an integration
 
+### Optional YouTube download jobs
+
+`GET /api/v1/youtube` is an authenticated, `no-store`, cached read of the separate host worker: `configured`, `available`, nullable last successful `observedAt`, and at most 121 bounded jobs. Poll failures retain last-good jobs and their original timestamps. Browser reads never extract metadata or poll the worker. `POST /api/v1/youtube` accepts only the strict shared preparation/submission/cancel/retry union; all mutations require owner session, exact origin and CSRF. Preparation accepts a fixed media kind, public HTTPS YouTube source and supplied names, never paths or flags. Submission freezes approved music-title edits against an opaque prepared job; cancel/retry use only that job ID. A 202 acknowledges a worker command, not download completion. Worker errors are sanitized categories.
+
+States distinguish preparing, ready preview, queued, downloading, processing, completed, partially-completed, failed, cancelled and interrupted; item states retain unavailable playlist positions without renumbering. Restart requires explicit retry and retains completed files. Source IDs and normalized manifests live only in the worker's separate version-1 SQLite database, not LabDeck state. File paths in responses are relative preview destinations, never host roots. No raw extraction responses, query-string URLs, subprocess logs or credentials persist. See [decision 009](../decisions/009-youtube-downloader.md), [installation and limits](youtube-downloader.md), and [validation evidence](../plans/youtube-validation-report.md).
+
 Implement a typed payload, sanitized fixtures and adapter; register its groups and safe transport routes; add summary/detail selectors and UI; add failure/partial tests and compatibility evidence. Reuse core health/history/auth rather than adding integration-specific versions. Do not require every provider to supply every capability.
 
 ### Optional ATA self-test evidence

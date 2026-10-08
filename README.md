@@ -14,9 +14,9 @@ Start with [PRODUCT.md](PRODUCT.md), then [ARCHITECTURE.md](ARCHITECTURE.md) and
 - [Provider contract](docs/integrations/contract.md), [service integration notes](docs/integrations/services.md), and [host collector](docs/integrations/host-collector.md)
 - [Execution milestones](PLAN.md), [validation protocol](docs/plans/validation.md), and [risk register](docs/plans/risks.md)
 
-The deployment is one application container with local SQLite storage. A host-installed collector publishes sanitized system, optional Docker, and optional Tailscale snapshots; a separate SMART timer publishes disk evidence. The application has no host command channel; see the [collector installation guide](deploy/systemd/README.md).
+The default deployment is one application container with local SQLite storage. A host-installed collector publishes sanitized system, optional Docker, and optional Tailscale snapshots; a separate SMART timer publishes disk evidence. The default application has no host command channel; explicitly enabled restricted host-service extensions use separate sockets. See the [collector installation guide](deploy/systemd/README.md).
 
-The first release checkpoint focuses on host health, filesystem capacity, Jellyfin, and a polished overview. Subsequent milestones complete the wider v1 monitoring experience. No infrastructure control actions are included in v1.
+The first release checkpoint focuses on host health, filesystem capacity, Jellyfin, and a polished overview. Subsequent milestones complete the wider v1 monitoring experience. Infrastructure control is not part of the default v1 baseline; optional owner-approved extensions remain separate and disabled by default.
 
 ## Local development
 
@@ -42,3 +42,6 @@ Vite serves the browser at `http://127.0.0.1:5173` and proxies API requests to `
 Run `npm run check`, `npm run test:unit`, `npm run test:integration -- --project=foundation`, `npm run test:integration -- --project=host`, `npm run test:integration -- --project=jellyfin`, and `npm run test:integration -- --project=arr` for normal checks. Live host and provider checks are explicit opt-ins; the host check is Ubuntu-only and provider checks require out-of-band key files. See [Compose deployment](deploy/compose/README.md) for a private HTTPS deployment.
 
 The module tree in ARCHITECTURE.md remains incremental: add paths only when their milestone needs them.
+## Optional YouTube downloads
+
+Downloads includes an opt-in Movie, TV Show and Music downloader backed by a restricted unprivileged host worker. It remains disabled until installed and `LABDECK_YOUTUBE_SOCKET_PATH` is set. Read [installation and security requirements](docs/integrations/youtube-downloader.md) before enabling; library media and worker SQLite are separate from LabDeck backups.

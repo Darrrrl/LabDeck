@@ -230,3 +230,25 @@ export const dashboardPreferencesSchema = z.object({
   hideWatchingTitles: z.boolean(), widgetOrder: z.array(z.enum(widgetIds)).length(6).refine((items) => new Set(items).size === 6)
 }).strict();
 export type DashboardPreferences = z.infer<typeof dashboardPreferencesSchema>;
+const youtubeNameSchema = z.string().trim().min(1).max(120).refine((value) => !/[\\/]/u.test(value) && !Array.from(value).some((character) => character.charCodeAt(0) < 32) && !['.', '..'].includes(value), 'Invalid media name');
+const youtubeIdSchema = z.string().regex(/^[a-f0-9]{32}$/);
+export const youtubeSourceSchema = z.string().max(512).regex(/^https:\/\/(?:youtu\.be\/[A-Za-z0-9_-]{11}|(?:www\.|m\.)?youtube\.com\/(?:watch\?v=[A-Za-z0-9_-]{11}|playlist\?list=[A-Za-z0-9_-]{10,100}))$/, 'Use a public HTTPS YouTube video or playlist URL without extra parameters');
+export const youtubePrepareSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('movie'), source: youtubeSourceSchema, name: youtubeNameSchema, year: z.number().int().min(1888).max(9999).optional() }).strict(),
+  z.object({ kind: z.literal('tv'), source: youtubeSourceSchema, name: youtubeNameSchema }).strict(),
+  z.object({ kind: z.literal('music'), source: youtubeSourceSchema, artist: youtubeNameSchema, album: youtubeNameSchema.default('Singles') }).strict()
+]).superRefine((request, context) => {
+  const playlist = request.source.includes('/playlist?');
+  if ((request.kind === 'movie' && playlist) || (request.kind === 'tv' && !playlist)) context.addIssue({ code: 'custom', message: 'Movie requires a video; TV Show requires a playlist' });
+});
+export const youtubeCommandSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('prepare'), request: youtubePrepareSchema }).strict(),
+  z.object({ action: z.literal('submit'), id: youtubeIdSchema, titles: z.array(youtubeNameSchema).max(200).optional() }).strict(),
+  z.object({ action: z.literal('cancel'), id: youtubeIdSchema }).strict(),
+  z.object({ action: z.literal('retry'), id: youtubeIdSchema }).strict()
+]);
+const youtubeItemSchema = z.object({ number: z.number().int().min(1).max(200), title: youtubeNameSchema, destination: z.string().max(512), state: z.enum(['pending', 'unavailable', 'downloading', 'processing', 'completed', 'failed', 'cancelled', 'interrupted']), error: z.string().max(64).nullable() }).strict();
+export const youtubeJobSchema = z.object({ id: youtubeIdSchema, kind: z.enum(['movie', 'tv', 'music']), name: youtubeNameSchema, state: z.enum(['preparing', 'ready', 'queued', 'downloading', 'processing', 'completed', 'partially-completed', 'failed', 'cancelled', 'interrupted']), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), error: z.string().max(64).nullable(), items: z.array(youtubeItemSchema).max(200) }).strict();
+export const youtubeStatusSchema = z.object({ configured: z.boolean(), available: z.boolean(), observedAt: z.iso.datetime().nullable(), jobs: z.array(youtubeJobSchema).max(121) }).strict();
+export const youtubeReplySchema = z.object({ ok: z.literal(true), id: youtubeIdSchema.optional(), jobs: z.array(youtubeJobSchema).max(121).optional() }).strict();
+export type YoutubeJob = z.infer<typeof youtubeJobSchema>;

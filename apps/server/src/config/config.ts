@@ -17,6 +17,7 @@ const environmentSchema = z.object({
   LABDECK_DOCKER_CONTROL_CONTAINERS: z.string().optional(),
   LABDECK_DOCKER_CONTROL_PROJECTS: z.string().optional(),
   LABDECK_FILE_CONTROL_SOCKET_PATH: z.string().min(1).optional(),
+  LABDECK_YOUTUBE_SOCKET_PATH: z.string().min(1).optional(),
   LABDECK_FILE_CONTROL_SHARE_ID: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/).optional(),
   LABDECK_EXPECTED_RUNNING_CONTAINERS: z.string().optional(),
   LABDECK_JELLYFIN_BASE_URL: z.url().optional(),
@@ -60,6 +61,7 @@ export interface AppConfig {
   dockerControlContainers?: ReadonlySet<string>;
   dockerControlProjects?: ReadonlySet<string>;
   fileControlSocketPath?: string;
+  youtubeSocketPath?: string;
   fileControlShareId?: string;
   expectedRunningContainers?: ReadonlySet<string>;
   jellyfin?: JellyfinConfig;
@@ -135,6 +137,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
     ...(parsed.LABDECK_DOCKER_CONTROL_SOCKET_PATH ? { dockerControlSocketPath: resolve(parsed.LABDECK_DOCKER_CONTROL_SOCKET_PATH) } : {}),
     dockerControlContainers: new Set(controlNames), dockerControlProjects: new Set(controlProjects),
     ...(parsed.LABDECK_FILE_CONTROL_SOCKET_PATH ? { fileControlSocketPath: resolve(parsed.LABDECK_FILE_CONTROL_SOCKET_PATH), fileControlShareId: parsed.LABDECK_FILE_CONTROL_SHARE_ID! } : {}),
+    ...(parsed.LABDECK_YOUTUBE_SOCKET_PATH ? { youtubeSocketPath: resolve(parsed.LABDECK_YOUTUBE_SOCKET_PATH) } : {}),
     expectedRunningContainers: new Set(expectedNames),
     ...(jellyfin ? { jellyfin } : {}),
     arr,

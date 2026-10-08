@@ -8,6 +8,8 @@ Primary environment: one Ubuntu server, Docker Compose, local persistent disk, e
 
 ## Release boundaries
 
+The optional [YouTube downloader](docs/integrations/youtube-downloader.md) is an explicitly owner-approved extension beyond the monitoring baseline. Downloads can prepare and confirm public YouTube movie, Season 01 playlist and tagged music jobs into server-configured Jellyfin libraries via a separate restricted host worker. It is disabled by default; no general downloader, arbitrary command interface or Jellyfin control endpoint is added.
+
 | Capability | First usable release: M1–M3 | Complete monitoring v1: through M9 | Later |
 | --- | --- | --- | --- |
 | Overview | Overall observed health, freshness, uptime, CPU/RAM, network, selected storage, Jellyfin | All configured service summaries and prioritized warnings | Custom layouts |

@@ -4,6 +4,10 @@ Status: M0–M8 fixture implementation complete. M2 Ubuntu, M3 Jellyfin, M4 Arr,
 
 ## Sequence and handoff discipline
 
+### Authorized extension — YouTube downloader
+
+Implemented 2026-10-08: optional restricted Python worker; Movie, TV Show and Music preparation/confirmation UI; authenticated cached state and CSRF-protected commands; local durable jobs, bounded serial execution, no-replace publication, NFO/tag output, cancel and retry. This is explicitly outside the original monitoring-only roadmap, following the host-service control boundary. Fixture/codec/browser evidence and pending Ubuntu/YouTube/Jellyfin gates are recorded in the [YouTube validation report](docs/plans/youtube-validation-report.md). See [installation](docs/integrations/youtube-downloader.md).
+
 `M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 → M9`
 
 First usable release checkpoint: M1–M3. Complete monitoring v1: M1–M9, including disk health. The ordering prioritizes a real system slice, then real Jellyfin, then broader monitoring. History/event primitives arrive in M2, with scale/retention hardening in M8. Advanced control actions are outside this plan.

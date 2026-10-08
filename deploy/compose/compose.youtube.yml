@@ -1,0 +1,6 @@
+services:
+  labdeck:
+    environment:
+      LABDECK_YOUTUBE_SOCKET_PATH: /run/labdeck-host/youtube-control/worker.sock
+    group_add:
+      - ${LABDECK_YOUTUBE_CONTROL_GID:?set the numeric labdeck-youtube-control GID}

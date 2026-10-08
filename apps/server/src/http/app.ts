@@ -5,7 +5,8 @@ import helmet from '@fastify/helmet';
 import staticFiles from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { dockerActionRequestSchema, historyRangeSchema, smartTestRequestSchema } from '@labdeck/contracts';
+import { dockerActionRequestSchema, historyRangeSchema, smartTestRequestSchema, youtubeCommandSchema } from '@labdeck/contracts';
+import { YoutubeMonitor, youtubeOperation } from '../integrations/host/youtube-control.js';
 import { LoginLimiter } from '../auth/login-limiter.js';
 import { verifyPassword } from '../auth/password.js';
 import { PreloginCsrfStore } from '../auth/prelogin-csrf.js';
@@ -72,6 +73,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const arrMonitors = arrStates.map(({ config: item, state }) => new ArrMonitor(new ArrAdapter(item.kind, new ArrTransport(item.baseUrl, item.apiKey)), state));
   const prowlarrMonitor = config.prowlarr ? new ProwlarrMonitor(new ProwlarrAdapter(new ProwlarrTransport(config.prowlarr.baseUrl, config.prowlarr.apiKey)), prowlarrState) : undefined;
   const sessions = new SessionStore(database);
+  const youtubeMonitor = config.youtubeSocketPath && !config.demoMode ? new YoutubeMonitor(config.youtubeSocketPath) : undefined;
   if (config.passwordHash) sessions.reconcilePasswordHash(config.passwordHash);
   const prelogin = new PreloginCsrfStore();
   const limiter = new LoginLimiter();
@@ -90,6 +92,27 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   let checkpointTimer: ReturnType<typeof setInterval> | undefined;
   let dockerActionInFlight = false;
   let fileRequestsInFlight = 0;
+  let youtubeRequestsInFlight = 0;
+  app.addHook('onReady', () => { youtubeMonitor?.start(); });
+  app.addHook('onClose', async () => { await youtubeMonitor?.stop(); });
+  app.get('/api/v1/youtube', (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return youtubeMonitor?.read() ?? { configured: false, available: false, observedAt: null, jobs: [] };
+  });
+  app.post('/api/v1/youtube', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const token = request.cookies[sessionCookie];
+    const csrf = typeof request.headers['x-csrf-token'] === 'string' ? request.headers['x-csrf-token'] : undefined;
+    if (!request.headers.origin || !exactEqual(request.headers.origin, config.canonicalOrigin) || !sessions.verifyCsrf(token, csrf)) return reply.code(403).send({ error: 'forbidden' });
+    const parsed = youtubeCommandSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid-request' });
+    if (!youtubeMonitor || !config.youtubeSocketPath) return reply.code(503).send({ error: 'not-configured' });
+    if (youtubeRequestsInFlight >= 2) return reply.code(429).send({ error: 'busy' });
+    youtubeRequestsInFlight++;
+    try { return reply.code(202).send(await youtubeOperation(config.youtubeSocketPath, parsed.data)); }
+    catch { return reply.code(409).send({ error: 'worker-unavailable-or-rejected' }); }
+    finally { youtubeRequestsInFlight--; }
+  });
 
   await app.register(cookie);
   await app.register(helmet, {

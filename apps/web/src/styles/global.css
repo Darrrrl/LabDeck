@@ -183,3 +183,14 @@ form button:disabled { opacity: .6; cursor: wait; }.form-error { margin: 3px 0; 
 .file-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); padding: 10px 0; overflow-wrap: anywhere; }
 .file-list strong { overflow-wrap: anywhere; }
 .file-list button, .file-toolbar button { min-height: 36px; }
+.youtube-panel { margin-bottom: 20px; }
+.youtube-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; align-items: end; }
+.youtube-form label, .youtube-items label { display: grid; gap: 6px; min-width: 0; }
+.youtube-form input, .youtube-form select, .youtube-items input { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.youtube-job { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 12px; }
+.youtube-items { padding-left: 24px; max-height: 360px; overflow: auto; }
+.youtube-items li { padding: 8px 0; overflow-wrap: anywhere; }
+.youtube-items span, .youtube-items small { display: block; }
+.youtube-job button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); color: var(--text); cursor: pointer; }
+.youtube-job button:disabled { opacity: .6; cursor: not-allowed; }
+.youtube-panel button:focus-visible, .youtube-panel input:focus-visible, .youtube-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
